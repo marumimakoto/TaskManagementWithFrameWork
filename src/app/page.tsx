@@ -1,475 +1,2686 @@
 'use client';
 
-/**
- * Interactive Mock ToDo (Next.js App Router)
- * 目的:
- * - UI/操作感を先に固める（保存や日次リセットは後）
- * - 「期限OK / 詰まり<3h / 未着手<2日」の3条件で色とバッジが変わる
- *
- * メンテ方針:
- * - ログは log() に集約して、DEBUGで一括ON/OFF
- * - 判定ロジック(checklist)は純粋関数に寄せる
- * - UIはまずインラインstyleで完結（後でCSS/Tailwindへ移行可）
- */
-
-import { useMemo, useState } from 'react';
-
-const DEBUG = true; // ←本番/通常運用では false 推奨（ログを止める）
-
-function log(scope: string, data?: unknown) {
-  if (!DEBUG) return;
-  // console.debug を使うと、必要なときだけDevToolsで拾いやすい
-  if (data !== undefined) console.debug(`[todo-mock:${scope}]`, data);
-  else console.debug(`[todo-mock:${scope}]`);
-}
-
-type Recurrence = 'carry' | 'daily';
-
-type Todo = {
-  id: string;
-  title: string;
-  estMin: number; // 予定(分)
-  actualMin: number; // 実績(分)
-  stuckHours: number; // 詰まり累計(時間)
-  lastWorkedAt?: number; // epoch ms（最後に触った時間）
-  deadline?: number; // epoch ms（締切）
-  recurrence: Recurrence;
-};
-
-// ID生成（衝突しにくい簡易版）
-function uid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-// 分→表示（UI用）
-function minutesToText(min: number) {
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h <= 0) return `${m}分`;
-  return `${h}時間${m}分`;
-}
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { AppUser, Todo, Recurrence, UndoToast, UserSettings, WorkLog } from './types';
+import { DEFAULT_SETTINGS } from './types';
+import {
+  log,
+  uid,
+  minutesToText,
+  parseDeadline,
+  toInputDeadline,
+  formatDeadline,
+  cardBgClass,
+  loadSession,
+  saveSession,
+  clearSession,
+} from './utils';
+import styles from './page.module.css';
+import DiaryWritePanel from './DiaryWritePanel';
+import DiaryViewPanel from './DiaryViewPanel';
+import PublicDiaryPanel from './PublicDiaryPanel';
+import MyPage from './MyPage';
+import SettingsPanel from './SettingsPanel';
+import TaskSetPanel from './TaskSetPanel';
+import ButlerAvatar from './ButlerAvatar';
+import PomodoroTimer from './PomodoroTimer';
+import MatrixPanel from './MatrixPanel';
+import ActivityPanel from './ActivityPanel';
+import ArchivedTodosPanel from './ArchivedTodosPanel';
+import RecurringPanel from './RecurringPanel';
+import { DragHandle, MoveButtonBar, DeleteButton } from './SharedComponents';
+import HelpPanel, { TUTORIAL_STEPS } from './HelpPanel';
+import BugReportPanel from './BugReportPanel';
+import AdminPanel from './AdminPanel';
 
 /**
- * 締切入力: "YYYY-MM-DD HH:mm"（例: 2026-02-11 18:30）
- * - 正規表現で最低限の形式チェック
- * - ローカルタイムとして Date を生成
- * - パース失敗時は undefined（＝締切未設定）
+ * ページのルートコンポーネント
+ * ログイン状態を管理し、未ログインならログイン/登録画面、ログイン済みならTodoAppを表示する
  */
-function parseDeadline(text: string): number | undefined {
-  const s = text.trim();
-  if (!s) return undefined;
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})$/);
-  if (!m) return undefined;
-  const [_, yy, mm, dd, HH, MM] = m;
-  const d = new Date(
-    Number(yy),
-    Number(mm) - 1,
-    Number(dd),
-    Number(HH),
-    Number(MM),
-    0,
-    0,
-  );
-  if (Number.isNaN(+d)) return undefined;
-  return d.getTime();
-}
-
-function formatDeadline(ts?: number) {
-  // 締切未設定は「今日中」扱い（仕様）
-  if (!ts) return '今日中';
-  const d = new Date(ts);
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getMonth() + 1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-/**
- * 締切まで残り(分)
- * - deadline未設定 → 今日の終わり(23:59:59)を締切として扱う（仕様）
- * - 期限切れは 0 に丸める
- */
-function minutesUntil(deadline?: number) {
-  const now = Date.now();
-  const end = deadline ?? new Date().setHours(23, 59, 59, 999);
-  return Math.max(0, Math.floor((end - now) / 60000));
-}
-
-function nowMinusDays(days: number) {
-  return Date.now() - days * 24 * 60 * 60 * 1000;
-}
-
-/**
- * リスク判定（中心ロジック）
- * okDeadline: 締切までの残り分 >= 残作業分（予定−実績）
- * okStuck: 詰まり累計 < 3h
- * okNotIdle: 最終作業からの経過 < 2日
- */
-function checklist(t: Todo) {
-  const remainingWork = Math.max(0, t.estMin - t.actualMin);
-  const restMin = minutesUntil(t.deadline);
-
-  const okDeadline = remainingWork <= restMin;
-  const okStuck = t.stuckHours < 3;
-
-  // 未作業（lastWorkedAtなし）は「未着手扱い」にしたいので、createdAtがない現状は“大昔”に倒してNGへ寄せる
-  const last = t.lastWorkedAt ?? nowMinusDays(9999);
-  const daysIdle = Math.floor((Date.now() - last) / (1000 * 60 * 60 * 24));
-  const okNotIdle = daysIdle < 2;
-
-  return { okDeadline, okStuck, okNotIdle, remainingWork, restMin, daysIdle };
-}
-
-function badgeBg(ok: boolean) {
-  return ok ? '#16a34a' : '#ef4444';
-}
-
-/**
- * カード背景色ルール
- * - どれかNGなら危険（赤）
- * - 全OKかつ未完了なら進行中（中立）
- * - 完了（実績>=予定）で全OKならOK（緑）
- */
-function cardBg(t: Todo) {
-  const c = checklist(t);
-  const okAll = c.okDeadline && c.okStuck && c.okNotIdle;
-  if (!okAll) return '#7f1d1d';
-  if (t.actualMin < t.estMin) return '#334155';
-  return '#064e3b';
-}
-
-function riskRank(t: Todo) {
-  const c = checklist(t);
-  const okAll = c.okDeadline && c.okStuck && c.okNotIdle;
-  if (!okAll) return 0;
-  if (t.actualMin < t.estMin) return 1;
-  return 2;
-}
-
-function inputStyle(): React.CSSProperties {
-  return {
-    padding: 12,
-    borderRadius: 12,
-    border: '1px solid #111827',
-    background: '#1f2937',
-    color: 'white',
-  };
-}
-
-function primaryBtnStyle(): React.CSSProperties {
-  return {
-    padding: 12,
-    borderRadius: 12,
-    border: 'none',
-    background: '#3b82f6',
-    color: 'white',
-    fontWeight: 700,
-    cursor: 'pointer',
-  };
-}
-
-function smallBtnStyle(): React.CSSProperties {
-  return {
-    padding: '10px 12px',
-    borderRadius: 10,
-    border: '1px solid #111827',
-    background: '#111827',
-    color: 'white',
-    cursor: 'pointer',
-  };
-}
-
-function dangerBtnStyle(): React.CSSProperties {
-  return {
-    padding: '10px 12px',
-    borderRadius: 10,
-    border: '1px solid #7f1d1d',
-    background: '#3f0d0d',
-    color: 'white',
-    cursor: 'pointer',
-  };
-}
-
-function badgeStyle(ok: boolean): React.CSSProperties {
-  return {
-    background: badgeBg(ok),
-    padding: '4px 8px',
-    borderRadius: 999,
-    fontSize: 12,
-  };
-}
-
-const initialTodos: Todo[] = [
-  {
-    id: uid(),
-    title: 'ToDoアプリのUIを作る',
-    estMin: 60,
-    actualMin: 20,
-    stuckHours: 0.5,
-    lastWorkedAt: Date.now(),
-    deadline: parseDeadline('2026-02-10 23:00'),
-    recurrence: 'carry',
-  },
-  {
-    id: uid(),
-    title: '締切が近いタスク（危険）',
-    estMin: 90,
-    actualMin: 10,
-    stuckHours: 0,
-    lastWorkedAt: Date.now(),
-    deadline: parseDeadline('2026-02-10 21:00'),
-    recurrence: 'carry',
-  },
-  {
-    id: uid(),
-    title: '詰まり3h超（危険）',
-    estMin: 45,
-    actualMin: 15,
-    stuckHours: 3.2,
-    lastWorkedAt: Date.now(),
-    deadline: parseDeadline('2026-02-11 12:00'),
-    recurrence: 'carry',
-  },
-  {
-    id: uid(),
-    title: '2日未着手（危険）',
-    estMin: 30,
-    actualMin: 0,
-    stuckHours: 0,
-    lastWorkedAt: nowMinusDays(2),
-    deadline: parseDeadline('2026-02-11 18:00'),
-    recurrence: 'daily',
-  },
+/** Welcomeページで表示する執事のメッセージ一覧 */
+const WELCOME_MESSAGES: string[] = [
+  '朝に太陽光を浴びると体内時計が整う。5分でも外に出ると、集中力が上がりやすい',
+  'やる気は行動の後に出る。脳は動いた後に「やる気」を作る仕組みになっている',
+  '人は最初の3分を乗り越えると作業が続きやすい。まず3分だけやると決める',
+  '朝に水を一杯飲むと代謝が上がる。寝起きのぼんやりも改善しやすい',
+  'タスクは細かく分けるほど着手しやすい。「5分でできる形」にすると進む',
+  '目標を書くと達成率が上がる。言語化で脳が優先度を認識するため',
+  '姿勢を正すだけで集中力は上がる。脳への血流が改善されるから',
+  '前日にやることを1つ決めると迷わない。朝の意思決定を減らせる',
+  '軽い運動はストレスを減らす。10分の散歩でも気分がリセットされる',
+  'スマホ通知を減らすと集中力が回復する。注意の分断を防げる',
+  'タコの心臓は3つある。うち2つはエラに血を送るための専用ポンプとして働く',
+  'バナナは果物ではなく草の一種。木に見えるが、実は巨大な草本植物である',
+  '人間の体内には約37兆個の細胞がある。日々入れ替わりながら生命を維持する',
+  '雷の温度は太陽の表面より高い。瞬間的に約3万度にも達するとされる',
+  'ペンギンは寒さに強いが暑さに弱い。種類によっては温暖な地域にも生息する',
+  'シャチはイルカの仲間。見た目はクジラに近いが、分類上はイルカ科に属する',
+  '蜂蜜は腐らない食品として知られる。水分が少なく、菌が繁殖しにくい',
+  'エベレストは毎年数ミリずつ高くなる。プレートの動きで少しずつ隆起する',
+  '人は寝ている間にコップ一杯分の汗をかく。体温調整のため無意識に行われる',
+  '宇宙では音は伝わらない。空気がないため、振動を伝える媒体が存在しない',
+  'クジラは意識的に呼吸する。眠っても完全に眠らず、片脳ずつ休ませる',
+  '人間の脳は約60％が脂肪でできている。体の中でも特に脂質の多い器官',
+  'カメレオンは背景に合わせて色を変えるだけでなく、感情でも色が変わる',
+  'サメには骨がない。体はすべて軟骨でできており、軽くてしなやかに動ける',
+  '北極と南極では気温が大きく違う。南極の方がはるかに寒い環境である',
+  '人は1日に約2万回呼吸する。意識しなくても体は常に働き続けている',
+  '鉛筆の芯は鉛ではない。黒鉛と粘土を混ぜたものが使われている',
+  '蝶は足で味を感じる。花に止まると同時に味を確認している',
+  '富士山は今も活火山である。最後の噴火は1707年の宝永噴火',
+  '水は4度のとき最も重くなる。この性質が湖の生態系を守っている',
+  '人の血管をすべてつなぐと約10万kmになる。地球を2周以上できる長さ',
+  'キリンの首の骨は7個。人間と同じ数だが、一つ一つが非常に長い',
+  '月は毎年少しずつ地球から遠ざかる。年間で約3.8センチ離れている',
+  'ゴリラは風邪をひくことがある。人間と似たウイルスに感染するため',
+  '砂糖はもともと薬として使われていた。昔は非常に高価で貴重な存在',
+  'タツノオトシゴはオスが出産する。メスから卵を受け取り体内で育てる',
+  '人は夢を一晩に何度も見る。覚えていないだけで複数回経験している',
+  '火星の夕焼けは青い。大気中の塵の影響で地球とは逆の色になる',
+  'カラスは非常に知能が高い。道具を使ったり、人の顔を覚えたりできる',
+  '人間は海水を飲めないが、魚は飲んでいる。体内で塩分を排出する仕組みがある',
+  '朝に最優先タスクを1つ終えると、その日全体の達成感が高まりやすい',
+  '集中力は25分が目安。短く区切ると疲れにくく、作業効率も維持できる',
+  '作業前に机を整えると、注意散漫を防げる。環境は思考に直結する',
+  '「やらないこと」を決めると、重要な作業に時間を使いやすくなる',
+  '同じ時間に起きると生活リズムが安定する。休日も大きく崩さない',
+  'タスクは紙に書くと記憶に残る。視覚化で抜け漏れも防ぎやすい',
+  '小さく始めると継続しやすい。ハードルを下げるのが習慣化のコツ',
+  'こまめな休憩は集中力を回復させる。長時間の連続作業は逆効果',
+  '決断の回数を減らすと疲れにくい。服や昼食を固定化するのも有効',
+  '一日の終わりに振り返ると改善が進む。次にやることも明確になる',
+  '玉ねぎは繊維に沿って切ると食感が残る。逆に切ると甘みが出やすい',
+  '肉は焼く30分前に常温に戻すと、火が均一に通りやすくなる',
+  'パスタは塩をしっかり入れると味が締まる。海水程度が目安',
+  '野菜は切ってから洗わない。栄養や旨味が水に流れやすくなる',
+  '卵は常温の方がきれいに焼ける。冷たいままだと焼きムラが出やすい',
+  'フライパンは十分に熱してから油を入れると、食材がくっつきにくい',
+  '味見は途中で何度もする。最後だけだと調整が難しくなる',
+  '魚は焼く前に水分を拭くと臭みが減り、皮もパリッと仕上がる',
+  '煮物は一度冷ますと味が染みる。温度が下がるときに吸収が進む',
+  'にんにくは焦がすと苦くなる。弱火で香りを出すのがポイント',
 ];
 
-export default function Page() {
-  // 状態: 本番では reducer + 永続化(localStorage/DB)へ進化させる
-  const [todos, setTodos] = useState<Todo[]>(() => {
-    log('init', { count: initialTodos.length });
-    return initialTodos;
-  });
+export default function Page(): React.ReactElement {
+  const [user, setUser] = useState<AppUser | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [showWelcome, setShowWelcome] = useState<boolean>(false);
+  const [welcomeFading, setWelcomeFading] = useState<boolean>(false);
+  const [welcomeMessage, setWelcomeMessage] = useState<string>('');
 
-  // 入力フォーム（Mock→まずは触れる形）
+  // SSR時にはlocalStorageにアクセスできないので、useEffectでクライアント側のみセッションを復元する
+  const welcomeTriggeredRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    const saved: AppUser | null = loadSession();
+    if (saved) {
+      setUser(saved);
+      if (!welcomeTriggeredRef.current) {
+        welcomeTriggeredRef.current = true;
+        const msg: string = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+        setWelcomeMessage(msg);
+        setShowWelcome(true);
+        setTimeout(() => setWelcomeFading(true), 2000);
+        setTimeout(() => { setShowWelcome(false); setWelcomeFading(false); }, 2800);
+      }
+    }
+    setAuthLoading(false);
+  }, []);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [registerName, setRegisterName] = useState('');
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+
+  /** メールアドレスとパスワードでAPIにログインリクエストを送る */
+  async function handleLogin(): Promise<void> {
+    setAuthError('');
+    const res: Response = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+    });
+    const data: { user?: AppUser; error?: string } = await res.json();
+    if (!res.ok || !data.user) {
+      setAuthError(data.error ?? 'ログインに失敗しました');
+      return;
+    }
+    saveSession(data.user);
+    setUser(data.user);
+    triggerWelcome();
+    log('login', { userId: data.user.id });
+  }
+
+  /** Welcome画面を表示してタイマーで自動フェードアウトする */
+  function triggerWelcome(): void {
+    const msg: string = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    setWelcomeMessage(msg);
+    setShowWelcome(true);
+    setWelcomeFading(false);
+    setTimeout(() => {
+      setWelcomeFading(true);
+    }, 2000);
+    setTimeout(() => {
+      setShowWelcome(false);
+      setWelcomeFading(false);
+    }, 2800);
+  }
+
+  /** 名前・メールアドレス・パスワードでAPIに登録リクエストを送る */
+  async function handleRegister(): Promise<void> {
+    setAuthError('');
+    const res: Response = await fetch('/api/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: registerName, email: registerEmail, password: registerPassword }),
+    });
+    const data: { user?: AppUser; error?: string } = await res.json();
+    if (!res.ok || !data.user) {
+      setAuthError(data.error ?? '登録に失敗しました');
+      return;
+    }
+    saveSession(data.user);
+    setUser(data.user);
+    triggerWelcome();
+    log('register', { userId: data.user.id });
+  }
+
+  /** セッションを削除してログアウトする */
+  function handleLogout(): void {
+    clearSession();
+    setUser(null);
+    log('logout');
+  }
+
+  /** ログイン/登録モードを切り替え、エラーをリセットする */
+  function switchAuthMode(): void {
+    setAuthMode(authMode === 'login' ? 'register' : 'login');
+    setAuthError('');
+  }
+
+  if (authLoading) {
+    return (
+      <div className={styles.loginWrapper}>
+        <p>読み込み中...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className={styles.loginWrapper}>
+        <div className={styles.loginCard}>
+          <h1 className={styles.loginTitle}>Daily ToDo</h1>
+
+          {authMode === 'login' ? (
+            <div className={styles.loginForm}>
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className={styles.input}
+              />
+              <input
+                type="password"
+                placeholder="パスワード"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className={styles.input}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleLogin();
+                  }
+                }}
+              />
+              {authError && <p className={styles.loginError}>{authError}</p>}
+              <button type="button" onClick={handleLogin} className={styles.primaryBtn}>
+                ログイン
+              </button>
+            </div>
+          ) : (
+            <div className={styles.loginForm}>
+              <input
+                type="text"
+                placeholder="名前"
+                value={registerName}
+                onChange={(e) => setRegisterName(e.target.value)}
+                className={styles.input}
+              />
+              <input
+                type="email"
+                placeholder="メールアドレス"
+                value={registerEmail}
+                onChange={(e) => setRegisterEmail(e.target.value)}
+                className={styles.input}
+              />
+              <input
+                type="password"
+                placeholder="パスワード（6文字以上）"
+                value={registerPassword}
+                onChange={(e) => setRegisterPassword(e.target.value)}
+                className={styles.input}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleRegister();
+                  }
+                }}
+              />
+              {authError && <p className={styles.loginError}>{authError}</p>}
+              <button type="button" onClick={handleRegister} className={styles.primaryBtn}>
+                登録
+              </button>
+            </div>
+          )}
+
+          <p className={styles.loginHint}>
+            <button type="button" onClick={switchAuthMode} className={styles.linkBtn}>
+              {authMode === 'login' ? 'アカウントを作成する' : 'ログインに戻る'}
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showWelcome) {
+    return (
+      <div className={`${styles.welcomeOverlay} ${welcomeFading ? styles.welcomeFadeOut : ''}`}>
+        <div className={styles.welcomeContent}>
+          <p className={styles.welcomeDate}>
+            {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
+          </p>
+          <div className={styles.welcomeAvatar}>🎩</div>
+          <p className={styles.welcomeMessage}>{welcomeMessage}</p>
+        </div>
+      </div>
+    );
+  }
+
+  return <TodoApp user={user} onLogout={handleLogout} onUserUpdate={(updated: AppUser) => setUser(updated)} />;
+}
+
+/**
+ * ログイン後に表示されるToDoアプリ本体
+ * タスクの一覧表示・追加・編集・削除・完了切り替えを行う
+ * @param user - ログイン中のユーザー情報
+ * @param onLogout - ログアウト時のコールバック
+ */
+function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: () => void; onUserUpdate: (updated: AppUser) => void }): React.ReactElement {
+  const [activeTab, setActiveTab] = useState<'tasks' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
+  const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
+  const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
+  const [tutorialHint, setTutorialHint] = useState<string | null>(null);
+  const [tutorialTarget, setTutorialTarget] = useState<string | null>(null);
+  const [tutorialPos, setTutorialPos] = useState<{ top: number; left: number } | null>(null);
+  const [tutorialStepIndex, setTutorialStepIndex] = useState<number | null>(null);
+
+  /**
+   * チュートリアルのアクションが発生したときに呼ぶ
+   * 現在のステップのtriggerActionと一致すれば、成功メッセージを表示して次のステップに進む
+   */
+  function notifyTutorialAction(action: string): void {
+    if (tutorialStepIndex === null || !tutorialHint) {
+      return;
+    }
+    const step = TUTORIAL_STEPS[tutorialStepIndex];
+    if (!step || step.triggerAction !== action) {
+      return;
+    }
+    // 成功メッセージを表示
+    const successMsg: string = step.successMessage ?? '完了しました！';
+    setTutorialHint(successMsg);
+    setTutorialTarget(null);
+    setTutorialPos(null);
+
+    // 2秒後に次のステップへ
+    const nextIndex: number = tutorialStepIndex + 1;
+    if (nextIndex < TUTORIAL_STEPS.length) {
+      setTimeout(() => {
+        const nextStep = TUTORIAL_STEPS[nextIndex];
+        setTutorialStepIndex(nextIndex);
+        setTutorialHint(nextStep.action);
+        if (nextStep.targetTab && nextStep.targetTab !== activeTab) {
+          setActiveTab(nextStep.targetTab as typeof activeTab);
+        }
+        // DOM描画待ちして位置計算
+        setTimeout(() => {
+          if (nextStep.targetSelector) {
+            const el: Element | null = document.querySelector(nextStep.targetSelector);
+            if (el) {
+              const rect: DOMRect = el.getBoundingClientRect();
+              setTutorialPos({
+                top: rect.bottom + window.scrollY + 8,
+                left: Math.max(16, Math.min(window.innerWidth - 340, rect.left + window.scrollX)),
+              });
+              setTutorialTarget(nextStep.targetSelector);
+              el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }
+        }, 300);
+      }, 2000);
+    } else {
+      // 全ステップ完了
+      setTimeout(() => {
+        setTutorialHint('全ステップ完了です！お疲れさまでした。');
+        setTimeout(() => {
+          setTutorialHint(null);
+          setTutorialPos(null);
+          setTutorialTarget(null);
+          setTutorialStepIndex(null);
+        }, 3000);
+      }, 2000);
+    }
+  }
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [undoToasts, setUndoToasts] = useState<UndoToast[]>([]);
+  const deleteOnceRef = useRef<Record<string, number>>({});
+
+  /** APIからログインユーザーのタスク一覧を取得してstateに反映する */
+  const fetchTodos = useCallback(async (): Promise<void> => {
+    try {
+      const url: string = '/api/todos?userId=' + user.id;
+      log('fetch:start', { url });
+      const res: Response = await fetch(url);
+      log('fetch:status', { status: res.status });
+      const data: Todo[] = await res.json();
+      log('fetch:data', { count: data.length, sample: data.slice(0, 2).map((t) => t.title) });
+      // sortOrderが全て0の場合はインデックスで初期化
+      const allZero: boolean = data.every((t) => t.sortOrder === 0);
+      if (allZero && data.length > 0) {
+        const initialized: Todo[] = data.map((t, i) => ({ ...t, sortOrder: i }));
+        setTodos(initialized);
+      } else {
+        setTodos(data);
+      }
+      log('fetch:ok', { count: data.length });
+    } catch (e) {
+      console.warn('Failed to fetch todos', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [user.id]);
+
+  useEffect(() => {
+    /** 初回表示時に日次リフレッシュを実行してからタスクを取得する */
+    async function initTodos(): Promise<void> {
+      try {
+        const refreshRes: Response = await fetch('/api/todos/refresh', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        const refreshData: { refreshed: boolean; archivedCount?: number; addedCount?: number } = await refreshRes.json();
+        if (refreshData.refreshed) {
+          log('refresh', { archived: refreshData.archivedCount, added: refreshData.addedCount });
+        }
+      } catch (e) {
+        console.warn('Failed to refresh todos', e);
+      }
+      fetchTodos();
+    }
+    initTodos();
+  }, [fetchTodos, user.id]);
+
+  /** APIからユーザーの表示設定を取得する */
+  useEffect(() => {
+    fetch('/api/settings?userId=' + user.id)
+      .then((res) => res.json())
+      .then((data: UserSettings) => setSettings(data))
+      .catch(() => {});
+  }, [user.id]);
+
+  /** 設定をCSS変数としてdocumentに適用する */
+  useEffect(() => {
+    const root: HTMLElement = document.documentElement;
+    root.style.setProperty('--app-font-size', settings.fontSize + 'px');
+    root.style.setProperty('--app-font-family', settings.fontFamily);
+    if (settings.darkMode) {
+      root.setAttribute('data-theme', 'dark');
+    } else {
+      root.removeAttribute('data-theme');
+    }
+  }, [settings]);
+
+  /**
+   * Undoトーストを表示する。同じtodoIdのトーストがあれば差し替える
+   * 3秒後に自動的に消える
+   * @param toast - 表示するトーストのデータ
+   */
+  function showUndoToast(toast: UndoToast): void {
+    setUndoToasts((prev) => {
+      const filtered = prev.filter((t) => t.todoId !== toast.todoId);
+      return [toast, ...filtered];
+    });
+    window.setTimeout(() => {
+      setUndoToasts((prev) => prev.filter((t) => t.toastId !== toast.toastId));
+    }, 3000);
+  }
+
+  const [actualInputs, setActualInputs] = useState<Record<string, string>>({});
+  const [actualDateInputs, setActualDateInputs] = useState<Record<string, string>>({});
+
+  // Add form
   const [title, setTitle] = useState('');
+  const [detailText, setDetailText] = useState('');
   const [estText, setEstText] = useState('30');
   const [mode, setMode] = useState<Recurrence>('carry');
-  const [deadlineText, setDeadlineText] = useState(''); // YYYY-MM-DD HH:mm
+  const [customInterval, setCustomInterval] = useState<string>('1');
+  const [customUnit, setCustomUnit] = useState<string>('week');
+  const [customWeekDays, setCustomWeekDays] = useState<string[]>(['mon']);
+  const [customMonthMode, setCustomMonthMode] = useState<'date' | 'weekday'>('date');
+  const [customMonthDay, setCustomMonthDay] = useState<string>('1');
+  const [customMonthNth, setCustomMonthNth] = useState<string>('1');
+  const [customMonthNthDay, setCustomMonthNthDay] = useState<string>('mon');
+  const [deadlineText, setDeadlineText] = useState('');
 
-  // 並べ替え: 危険→進行中→OK、締切が近い順
-  const sorted = useMemo(() => {
-    const s = [...todos].sort((a, b) => {
-      const ra = riskRank(a);
-      const rb = riskRank(b);
-      if (ra !== rb) return ra - rb;
-      const da = a.deadline ?? Number.MAX_SAFE_INTEGER;
-      const db = b.deadline ?? Number.MAX_SAFE_INTEGER;
-      return da - db;
+  // 表示モード
+  const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid'>('detail');
+
+  // カード展開
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // カード展開を検知してチュートリアルに通知
+  const prevExpandedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (expandedId && !prevExpandedRef.current) {
+      notifyTutorialAction('expandCard');
+    }
+    prevExpandedRef.current = expandedId;
+  });
+
+  // 作業ログ
+  const [workLogs, setWorkLogs] = useState<Record<string, WorkLog[]>>({});
+  const [logInput, setLogInput] = useState<string>('');
+  const [showLogId, setShowLogId] = useState<string | null>(null);
+
+  // Inline edit（フィールド単位で編集）
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<'title' | 'detail' | 'est' | 'actual' | 'deadline' | null>(null);
+  const [editValue, setEditValue] = useState('');
+
+  // ドラッグ&ドロップ
+  const [dragId, setDragId] = useState<string | null>(null);
+  const isDraggingRef = useRef<boolean>(false);
+  const [pomodoroTodo, setPomodoroTodo] = useState<Todo | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+  const [dragOverMode, setDragOverMode] = useState<'child' | 'between' | null>(null);
+  const [dropBetweenIndex, setDropBetweenIndex] = useState<number | null>(null);
+
+  const sorted: Todo[] = useMemo((): Todo[] => {
+    const copied: Todo[] = [...todos];
+    const s: Todo[] = copied.sort((a: Todo, b: Todo): number => {
+      const aIsRoot: boolean = !a.parentId;
+      const bIsRoot: boolean = !b.parentId;
+
+      // ルートタスク同士の場合、カード色の順で並べる
+      // リスク(cardDanger)=0 → 進行中(cardInProgress)=1 → 完了(cardDone)=2
+      if (aIsRoot && bIsRoot) {
+        const colorOrder: Record<string, number> = {
+          cardDanger: 0,
+          cardInProgress: 1,
+          cardDone: 2,
+        };
+        const aOrder: number = colorOrder[cardBgClass(a)] ?? 1;
+        const bOrder: number = colorOrder[cardBgClass(b)] ?? 1;
+        if (aOrder !== bOrder) {
+          return aOrder - bOrder;
+        }
+      }
+      // 同カテゴリ内はsortOrderの小さい方が上
+      return a.sortOrder - b.sortOrder;
     });
     log('sort', { count: s.length });
     return s;
   }, [todos]);
 
-  function addTodo() {
-    const t = title.trim();
-    const est = Math.max(1, parseInt(estText || '0', 10));
+  /** 凡例用：各カテゴリのタスク件数 */
+  const legendCounts: { danger: number; inProgress: number; done: number } = useMemo((): { danger: number; inProgress: number; done: number } => {
+    let danger: number = 0;
+    let inProgress: number = 0;
+    let done: number = 0;
+    for (const t of todos) {
+      const bg: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+      if (bg === 'cardDanger') {
+        danger++;
+      } else if (bg === 'cardInProgress') {
+        inProgress++;
+      } else {
+        done++;
+      }
+    }
+    return { danger, inProgress, done };
+  }, [todos]);
+
+  /**
+   * ソート済みタスクを階層構造のフラットリストに変換する
+   * 親タスクの直後に子タスクがインデント付きで並ぶ
+   */
+  /**
+   * ソート済みタスクからフラットリスト（todo + depth）を直接構築する
+   * 親が存在しないタスクはルート（depth=0）として扱う
+   */
+  const treeList: { todo: Todo; depth: number }[] = useMemo((): { todo: Todo; depth: number }[] => {
+    // 全IDセット
+    const allIds: Set<string> = new Set(sorted.map((t) => t.id));
+
+    // 親→子のマッピングを構築
+    const childrenMap: Record<string, Todo[]> = {};
+    for (const t of sorted) {
+      const hasValidParent: boolean = Boolean(t.parentId) && allIds.has(t.parentId!);
+      const parentKey: string = hasValidParent ? t.parentId! : '__root__';
+      if (!childrenMap[parentKey]) {
+        childrenMap[parentKey] = [];
+      }
+      childrenMap[parentKey].push(t);
+    }
+
+    // 再帰的にフラットリストを構築（循環参照を検出して断ち切る）
+    const result: { todo: Todo; depth: number }[] = [];
+    const visited: Set<string> = new Set();
+    function walk(parentId: string, depth: number): void {
+      const children: Todo[] = childrenMap[parentId] ?? [];
+      for (const child of children) {
+        if (visited.has(child.id)) {
+          continue;
+        }
+        visited.add(child.id);
+        result.push({ todo: child, depth });
+        walk(child.id, depth + 1);
+      }
+    }
+    walk('__root__', 0);
+
+    // ルートから辿れなかったタスクをルートとして追加（循環参照の断ち切り）
+    for (const t of sorted) {
+      if (!visited.has(t.id)) {
+        visited.add(t.id);
+        result.push({ todo: t, depth: 0 });
+        walk(t.id, 1);
+      }
+    }
+
+    log('treeList', {
+      total: result.length,
+      todosCount: todos.length,
+      sortedCount: sorted.length,
+      rootCount: (childrenMap['__root__'] ?? []).length,
+    });
+
+    return result;
+  }, [sorted, todos.length]);
+
+  /** キーボードで選択タスクを操作する（↑↓=移動、→=階層深く、←=階層浅く、Esc=選択解除） */
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent): void {
+      if (!selectedId || activeTab !== 'tasks') {
+        return;
+      }
+      const tag: string = (e.target as HTMLElement).tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        moveTodo(selectedId, 'up');
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        moveTodo(selectedId, 'down');
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const idx: number = treeList.findIndex((item) => item.todo.id === selectedId);
+        if (idx > 0) {
+          const prevTodo: Todo = treeList[idx - 1].todo;
+          const currentTodo: Todo | undefined = todos.find((t) => t.id === selectedId);
+          if (currentTodo && (currentTodo.parentId ?? null) === (prevTodo.parentId ?? null)) {
+            changeParent(selectedId, prevTodo.id);
+          }
+        }
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const currentTodo: Todo | undefined = todos.find((t) => t.id === selectedId);
+        if (currentTodo && currentTodo.parentId) {
+          const parentTodo: Todo | undefined = todos.find((t) => t.id === currentTodo.parentId);
+          changeParent(selectedId, parentTodo?.parentId ?? null);
+        }
+      } else if (e.key === 'Escape') {
+        setSelectedId(null);
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedId, activeTab, treeList, todos]);
+
+  /**
+   * ドラッグしたタスクをドロップ先タスクの子として設定する
+   * @param childId - ドラッグ中のタスクID
+   * @param newParentId - ドロップ先のタスクID（ルートに戻す場合はnull）
+   */
+  async function changeParent(childId: string, newParentId: string | null): Promise<void> {
+    // 自分自身を親にはできない
+    if (childId === newParentId) {
+      return;
+    }
+    // 循環参照チェック：newParentIdがchildIdの子孫であればキャンセル
+    if (newParentId) {
+      const descendants: string[] = getDescendantIds(childId, todos);
+      if (descendants.includes(newParentId)) {
+        return;
+      }
+    }
+    setTodos((prev) =>
+      prev.map((t) => (t.id === childId ? { ...t, parentId: newParentId ?? undefined } : t)),
+    );
+    log('changeParent', { childId, newParentId });
+
+    await fetch('/api/todos/' + childId, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: { parentId: newParentId } }),
+    });
+  }
+
+  /**
+   * treeList内でタスクを上下に移動する
+   * 同じ親を持つ兄弟間でsortOrderを入れ替える
+   * @param todoId - 移動するタスクのID
+   * @param direction - 'up' で上に、'down' で下に
+   */
+  async function moveTodo(todoId: string, direction: 'up' | 'down'): Promise<void> {
+    const target: Todo | undefined = todos.find((t) => t.id === todoId);
+    if (!target) {
+      return;
+    }
+
+    // 同じ親を持つ兄弟をsortOrder順で取得
+    const siblings: Todo[] = sorted.filter((t) => (t.parentId ?? undefined) === (target.parentId ?? undefined));
+    const idx: number = siblings.findIndex((t) => t.id === todoId);
+    if (idx === -1) {
+      return;
+    }
+
+    const swapIdx: number = direction === 'up' ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= siblings.length) {
+      return;
+    }
+
+    const swapTarget: Todo = siblings[swapIdx];
+    const newOrder: number = swapTarget.sortOrder;
+    const swapOrder: number = target.sortOrder;
+
+    // 同じsortOrderの場合は差をつける
+    const orderA: number = newOrder === swapOrder && direction === 'up' ? swapOrder - 1 : newOrder;
+    const orderB: number = newOrder === swapOrder && direction === 'down' ? swapOrder + 1 : swapOrder;
+
+    setTodos((prev) =>
+      prev.map((t) => {
+        if (t.id === todoId) {
+          return { ...t, sortOrder: orderA };
+        }
+        if (t.id === swapTarget.id) {
+          return { ...t, sortOrder: orderB };
+        }
+        return t;
+      }),
+    );
+
+    await Promise.all([
+      fetch('/api/todos/' + todoId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: { sortOrder: orderA } }),
+      }),
+      fetch('/api/todos/' + swapTarget.id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: { sortOrder: orderB } }),
+      }),
+    ]);
+
+    log('moveTodo', { todoId, direction });
+  }
+
+  /**
+   * 入力フォームの内容から新しいタスクを作成し、画面とDBに追加する
+   * タイトルが空の場合は追加しない。締切の形式が不正ならアラートを出す
+   */
+  async function addTodo(): Promise<void> {
+    const t: string = title.trim();
+    const est: number = Math.max(1, parseInt(estText || '0', 10));
     if (!t) {
       log('addTodo:blocked', { reason: 'empty title' });
       return;
     }
 
-    const d = parseDeadline(deadlineText);
+    const d: number | undefined = parseDeadline(deadlineText);
     if (deadlineText.trim() && d === undefined) {
-      // 形式が違ってたらユーザーに明確に知らせる（保守性のため）
-      alert('締切は「YYYY-MM-DD HH:mm」形式で入力してね。例: 2026-02-11 18:30');
+      alert('締切は「YYYY-MM-DD」形式。例: 2026-02-11');
       log('addTodo:blocked', { reason: 'deadline parse failed', deadlineText });
       return;
     }
 
+    const det: string | undefined = detailText.trim() || undefined;
+    // 新しいタスクは最小sortOrder - 1 で先頭に追加
+    const minOrder: number = todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) : 0;
     const todo: Todo = {
       id: uid(),
       title: t,
+      detail: det,
       estMin: est,
       actualMin: 0,
       stuckHours: 0,
       lastWorkedAt: undefined,
       deadline: d,
       recurrence: mode,
+      started: false,
+      done: false,
+      sortOrder: minOrder - 1,
     };
 
     setTodos((prev) => [todo, ...prev]);
     log('addTodo:ok', todo);
+    notifyTutorialAction('addTodo');
 
     setTitle('');
+    setDetailText('');
     setEstText('30');
     setDeadlineText('');
     setMode('carry');
+
+    await fetch('/api/todos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: user.id, todo }),
+    });
   }
 
-  function addLog(id: string) {
-    // NOTE: 本番はModal UIにする（promptは仮）
-    const mText = window.prompt('実績(分)を加算：例 15', '15');
-    if (mText == null) return;
-    const addMin = Math.max(0, parseInt(mText || '0', 10));
+  /**
+   * 指定タスクに実績時間を加算し、作業日時を更新する
+   * 日付が指定されていればその日の23:59:59を、未指定なら現在時刻を使う
+   * @param id - 対象タスクのID
+   */
+  async function addLog(id: string): Promise<void> {
+    const text: string = actualInputs[id] ?? '0';
+    const addMin: number = Math.max(0, parseInt(text || '0', 10));
+    if (addMin <= 0) {
+      log('addLog:blocked', { id });
+      return;
+    }
 
-    const hText = window.prompt('詰まり(時間)を加算：例 0.5', '0');
-    if (hText == null) return;
-    const addHours = Math.max(0, parseFloat(hText || '0'));
+    const target: Todo | undefined = todos.find((t) => t.id === id);
+    if (!target) {
+      return;
+    }
+
+    // 日付入力があればその日の23:59:59、なければ現在時刻
+    const dateStr: string = actualDateInputs[id] ?? '';
+    let workedAt: number;
+    if (dateStr) {
+      const parts: string[] = dateStr.split('-');
+      const d: Date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+      workedAt = d.getTime();
+    } else {
+      workedAt = Date.now();
+    }
+
+    const newActual: number = target.actualMin + addMin;
 
     setTodos((prev) =>
       prev.map((t) =>
         t.id === id
-          ? {
-            ...t,
-            actualMin: t.actualMin + addMin,
-            stuckHours: t.stuckHours + addHours,
-            lastWorkedAt: Date.now(),
-          }
+          ? { ...t, actualMin: newActual, lastWorkedAt: workedAt }
           : t,
       ),
     );
-    log('addLog', { id, addMin, addHours });
+    setActualInputs((prev) => ({ ...prev, [id]: '' }));
+    setActualDateInputs((prev) => ({ ...prev, [id]: '' }));
+    log('addLog:ok', { id, addMin, dateStr });
+
+    await fetch('/api/todos/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: workedAt } }),
+    });
   }
 
-  function markDone(id: string) {
-    // 触れる用の簡易: 完了扱い＝実績を予定に合わせる
+  /**
+   * 指定タスクの全子孫IDを再帰的に取得する
+   * @param parentId - 親タスクのID
+   * @param allTodos - 全タスク配列
+   * @returns 子孫タスクのID配列
+   */
+  function getDescendantIds(parentId: string, allTodos: Todo[]): string[] {
+    const children: Todo[] = allTodos.filter((t) => t.parentId === parentId);
+    const ids: string[] = [];
+    for (const child of children) {
+      ids.push(child.id);
+      ids.push(...getDescendantIds(child.id, allTodos));
+    }
+    return ids;
+  }
+
+  /**
+   * タスクの完了/未完了を切り替える
+   * 親タスク完了時は子も全て完了にする。親を未完了に戻したら子も全て未完了に戻す
+   * 子タスクの切り替えは親に影響しない
+   * @param id - 対象タスクのID
+   */
+  async function toggleDone(id: string): Promise<void> {
+    const target: Todo | undefined = todos.find((t) => t.id === id);
+    if (!target) {
+      return;
+    }
+
+    const wasDone: boolean = target.done;
+    const newDone: boolean = !wasDone;
+    const now: number = Date.now();
+
+    // 子孫タスクのIDを取得
+    const descendantIds: string[] = getDescendantIds(id, todos);
+    // 変更対象のID一覧（自分 + 子孫）
+    const affectedIds: Set<string> = new Set([id, ...descendantIds]);
+
+    // 元の状態を保存（Undo用）
+    const originalStates: Record<string, { done: boolean; lastWorkedAt?: number }> = {};
+    for (const t of todos) {
+      if (affectedIds.has(t.id)) {
+        originalStates[t.id] = { done: t.done, lastWorkedAt: t.lastWorkedAt };
+      }
+    }
+
     setTodos((prev) =>
-      prev.map((t) =>
-        t.id === id ? { ...t, actualMin: t.estMin, lastWorkedAt: Date.now() } : t,
-      ),
+      prev.map((t) => {
+        if (affectedIds.has(t.id)) {
+          return { ...t, done: newDone, lastWorkedAt: now };
+        }
+        return t;
+      }),
     );
-    log('markDone', { id });
+
+    const affectedCount: number = affectedIds.size;
+    const message: string = wasDone
+      ? `「${target.title}」を未完了に戻しました` + (affectedCount > 1 ? `（子タスク${affectedCount - 1}件も）` : '')
+      : `「${target.title}」を完了にしました` + (affectedCount > 1 ? `（子タスク${affectedCount - 1}件も）` : '');
+
+    showUndoToast({
+      toastId: uid(),
+      todoId: id,
+      message,
+      undoLabel: '取り消す',
+      undo: () => {
+        setTodos((cur) =>
+          cur.map((t) => {
+            if (originalStates[t.id]) {
+              return { ...t, done: originalStates[t.id].done, lastWorkedAt: originalStates[t.id].lastWorkedAt };
+            }
+            return t;
+          }),
+        );
+        setUndoToasts((prev) => prev.filter((t) => t.todoId !== id));
+        // 全てのaffectedを元に戻すAPIコール
+        for (const affId of affectedIds) {
+          fetch('/api/todos/' + affId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates: { done: originalStates[affId].done, lastWorkedAt: originalStates[affId].lastWorkedAt } }),
+          });
+        }
+      },
+    });
+
+    log('toggleDone', { id, affectedCount });
+    notifyTutorialAction('toggleDone');
+
+    // 全てのaffectedをAPIで更新
+    const updatePromises: Promise<Response>[] = Array.from(affectedIds).map((affId) =>
+      fetch('/api/todos/' + affId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: { done: newDone, lastWorkedAt: now } }),
+      }),
+    );
+    await Promise.all(updatePromises);
   }
 
-  function removeTodo(id: string) {
+  /**
+   * タスクを削除し、Undoトーストを表示する
+   * 300ms以内の連続クリックを無視するデバウンス付き
+   * @param id - 削除対象タスクのID
+   */
+  async function removeTodoWithUndo(id: string): Promise<void> {
+    const now: number = Date.now();
+    const last: number = deleteOnceRef.current[id] ?? 0;
+    if (now - last < 300) {
+      log('removeTodoWithUndo:blocked', { id });
+      return;
+    }
+    deleteOnceRef.current[id] = now;
+
+    const idx: number = todos.findIndex((t) => t.id === id);
+    if (idx === -1) {
+      return;
+    }
+
+    const removed: Todo = todos[idx];
     setTodos((prev) => prev.filter((t) => t.id !== id));
-    log('removeTodo', { id });
+
+    const toastId: string = uid();
+    showUndoToast({
+      toastId,
+      todoId: id,
+      message: `「${removed.title}」を削除しました`,
+      undoLabel: '取り消す',
+      undo: () => {
+        setTodos((cur) => {
+          if (cur.some((t) => t.id === removed.id)) {
+            return cur;
+          }
+          const restored = [...cur];
+          restored.splice(Math.min(idx, restored.length), 0, removed);
+          return restored;
+        });
+        setUndoToasts((prev) => prev.filter((t) => t.toastId !== toastId));
+        fetch('/api/todos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, todo: removed }),
+        });
+      },
+    });
+
+    log('removeTodoWithUndo', { id });
+
+    await fetch('/api/todos/' + id, {
+      method: 'DELETE',
+    });
+  }
+
+  /**
+   * 完了済みタスクを全て削除する
+   */
+  async function removeAllDone(): Promise<void> {
+    const doneTodos: Todo[] = todos.filter((t) => t.done);
+    if (doneTodos.length === 0) {
+      return;
+    }
+    if (!window.confirm(`完了済み${doneTodos.length}件を全て削除しますか？`)) {
+      return;
+    }
+    setTodos((prev) => prev.filter((t) => !t.done));
+    for (const t of doneTodos) {
+      await fetch('/api/todos/' + t.id, { method: 'DELETE' });
+    }
+    log('removeAllDone', { count: doneTodos.length });
+  }
+
+  /**
+   * 全タスクを削除する
+   */
+  async function removeAllTodos(): Promise<void> {
+    if (todos.length === 0) {
+      return;
+    }
+    if (!window.confirm(`全${todos.length}件のタスクを削除しますか？この操作は取り消せません。\n（削除したタスクはアーカイブに保存されます）`)) {
+      return;
+    }
+    const allTodos: Todo[] = [...todos];
+    setTodos([]);
+    for (const t of allTodos) {
+      await fetch('/api/todos/' + t.id, { method: 'DELETE' });
+    }
+    log('removeAllTodos', { count: allTodos.length });
+  }
+
+  /**
+   * タスクを1つ上に移動する（同じ階層内で前のタスクと入れ替え）
+   * stateを即座に更新し、APIは非同期で投げる（連打対応）
+   */
+  function moveUp(todoId: string): void {
+    setTodos((prev) => {
+      const list: Todo[] = [...prev].sort((a, b) => a.sortOrder - b.sortOrder);
+      const current: Todo | undefined = list.find((t) => t.id === todoId);
+      if (!current) {
+        return prev;
+      }
+      // 同じ親のタスクだけを抽出
+      const siblings: Todo[] = list.filter((t) => (t.parentId ?? null) === (current.parentId ?? null));
+      const sibIdx: number = siblings.findIndex((t) => t.id === todoId);
+      if (sibIdx <= 0) {
+        return prev;
+      }
+      const target: Todo = siblings[sibIdx - 1];
+      const tempOrder: number = current.sortOrder;
+      const newOrder: number = target.sortOrder;
+      // API呼び出し（非同期、awaitしない）
+      fetch('/api/todos/' + current.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: newOrder } }) });
+      fetch('/api/todos/' + target.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: tempOrder } }) });
+      return prev.map((todo) => {
+        if (todo.id === current.id) {
+          return { ...todo, sortOrder: newOrder };
+        }
+        if (todo.id === target.id) {
+          return { ...todo, sortOrder: tempOrder };
+        }
+        return todo;
+      });
+    });
+  }
+
+  /**
+   * タスクを1つ下に移動する（同じ階層内で次のタスクと入れ替え）
+   */
+  function moveDown(todoId: string): void {
+    setTodos((prev) => {
+      const list: Todo[] = [...prev].sort((a, b) => a.sortOrder - b.sortOrder);
+      const current: Todo | undefined = list.find((t) => t.id === todoId);
+      if (!current) {
+        return prev;
+      }
+      const siblings: Todo[] = list.filter((t) => (t.parentId ?? null) === (current.parentId ?? null));
+      const sibIdx: number = siblings.findIndex((t) => t.id === todoId);
+      if (sibIdx < 0 || sibIdx >= siblings.length - 1) {
+        return prev;
+      }
+      const target: Todo = siblings[sibIdx + 1];
+      const tempOrder: number = current.sortOrder;
+      const newOrder: number = target.sortOrder;
+      fetch('/api/todos/' + current.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: newOrder } }) });
+      fetch('/api/todos/' + target.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: tempOrder } }) });
+      return prev.map((todo) => {
+        if (todo.id === current.id) {
+          return { ...todo, sortOrder: newOrder };
+        }
+        if (todo.id === target.id) {
+          return { ...todo, sortOrder: tempOrder };
+        }
+        return todo;
+      });
+    });
+  }
+
+  /**
+   * タスクを右に移動する（直前の同階層タスクの子にする）
+   */
+  function moveRight(todoId: string): void {
+    const list: Todo[] = [...todos].sort((a, b) => a.sortOrder - b.sortOrder);
+    const current: Todo | undefined = list.find((t) => t.id === todoId);
+    if (!current) {
+      return;
+    }
+    const siblings: Todo[] = list.filter((t) => (t.parentId ?? null) === (current.parentId ?? null));
+    const sibIdx: number = siblings.findIndex((t) => t.id === todoId);
+    if (sibIdx <= 0) {
+      return;
+    }
+    const target: Todo = siblings[sibIdx - 1];
+    changeParent(todoId, target.id);
+  }
+
+  /**
+   * タスクを左に移動する（親の階層に戻す）
+   */
+  function moveLeft(todoId: string): void {
+    const current: Todo | undefined = todos.find((t) => t.id === todoId);
+    if (!current || !current.parentId) {
+      return;
+    }
+    const parent: Todo | undefined = todos.find((t) => t.id === current.parentId);
+    changeParent(todoId, parent?.parentId ?? null);
+  }
+
+  /**
+   * タスクをGoogleカレンダーにイベントとして追加するURLを生成する
+   * @param t - 対象タスク
+   * @returns Googleカレンダーのイベント作成URL
+   */
+  function buildGoogleCalendarUrl(t: Todo): string {
+    const title: string = encodeURIComponent(t.title);
+    const details: string = encodeURIComponent(t.detail ?? '');
+    // 開始時刻: 現在時刻、終了時刻: 予定時間分後
+    const now: Date = new Date();
+    const end: Date = new Date(now.getTime() + t.estMin * 60 * 1000);
+    const pad = (n: number): string => String(n).padStart(2, '0');
+    function toGoogleDate(d: Date): string {
+      return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    }
+    const dates: string = `${toGoogleDate(now)}/${toGoogleDate(end)}`;
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dates}`;
+  }
+
+  /**
+   * タスク展開時の共通UIを描画する
+   * detail/compact両モードから呼び出される
+   */
+  function renderExpandedContent(t: Todo): React.ReactElement {
+    return (
+      <div className={styles.workLogArea} onClick={(e) => e.stopPropagation()}>
+        {/* 移動操作ボタン */}
+        <MoveButtonBar
+          onUp={() => moveUp(t.id)}
+          onDown={() => moveDown(t.id)}
+          onNest={() => moveRight(t.id)}
+          onUnnest={() => moveLeft(t.id)}
+          hasParent={!!t.parentId}
+        />
+
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+          <button
+            type="button"
+            className={styles.primaryBtn}
+            style={{ fontSize: '13px', padding: '6px 14px' }}
+            onClick={() => setPomodoroTodo(t)}
+          >
+            🍅 ポモドーロ開始
+          </button>
+          {t.parentId && (
+            <button
+              type="button"
+              className={styles.iconBtn}
+              onClick={() => changeParent(t.id, null)}
+            >
+              ↑ ルートに戻す
+            </button>
+          )}
+          <button
+            type="button"
+            className={styles.iconBtn}
+            onClick={() => setShowLogId(showLogId === t.id ? null : t.id)}
+          >
+            {showLogId === t.id ? '作業ログを閉じる' : 'これまでの作業ログを見る'}
+          </button>
+          <a
+            href={buildGoogleCalendarUrl(t)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={styles.iconBtn}
+            style={{ textDecoration: 'none', fontSize: '13px' }}
+            title="Googleカレンダーに追加"
+          >
+            📅 カレンダーに追加
+          </a>
+        </div>
+        <div className={styles.workLogInputRow}>
+          <input
+            type="date"
+            value={actualDateInputs[t.id] ?? ''}
+            onChange={(e) =>
+              setActualDateInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
+            }
+            className={styles.inputDate}
+          />
+          <input
+            type="text"
+            placeholder="やったことを記録..."
+            value={logInput}
+            onChange={(e) => setLogInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                addWorkLog(t.id);
+              }
+            }}
+            className={styles.input}
+          />
+          <button
+            type="button"
+            onClick={() => addWorkLog(t.id)}
+            className={styles.iconBtn}
+          >
+            記録
+          </button>
+        </div>
+        {showLogId === t.id && (
+          (workLogs[t.id] ?? []).length > 0 ? (
+            <ul className={styles.workLogList}>
+              {(workLogs[t.id] ?? []).map((wl: WorkLog) => (
+                <li key={wl.id} className={styles.workLogItem}>
+                  <span className={styles.workLogDate}>{wl.date}</span>
+                  <span className={styles.workLogContent}>{wl.content}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className={styles.workLogEmpty}>作業記録はまだありません</p>
+          )
+        )}
+      </div>
+    );
+  }
+
+  /**
+   * 指定フィールドのインライン編集を開始する
+   * @param t - 編集対象のタスク
+   * @param field - 編集するフィールド名
+   */
+  function startFieldEdit(t: Todo, field: 'title' | 'detail' | 'est' | 'actual' | 'deadline'): void {
+    log('edit:start', { id: t.id, field });
+    setEditingId(t.id);
+    setEditingField(field);
+    notifyTutorialAction('inlineEdit');
+    if (field === 'title') {
+      setEditValue(t.title);
+    } else if (field === 'detail') {
+      setEditValue(t.detail ?? '');
+    } else if (field === 'est') {
+      setEditValue(String(t.estMin));
+    } else if (field === 'actual') {
+      setEditValue(String(t.actualMin));
+    } else if (field === 'deadline') {
+      setEditValue(t.deadline ? toInputDeadline(t.deadline) : '');
+    }
+  }
+
+  /** インライン編集をキャンセルする */
+  function cancelFieldEdit(): void {
+    log('edit:cancel', { id: editingId, field: editingField });
+    setEditingId(null);
+    setEditingField(null);
+  }
+
+  /**
+   * 編集中のフィールドを保存し、画面とDBに反映する
+   * @param id - 編集対象タスクのID
+   */
+  async function saveFieldEdit(id: string): Promise<void> {
+    if (!editingField) {
+      return;
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if (editingField === 'title') {
+      const trimmed: string = editValue.trim();
+      if (!trimmed) {
+        alert('タイトルは必須');
+        return;
+      }
+      updates.title = trimmed;
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, title: trimmed } : todo)),
+      );
+    } else if (editingField === 'detail') {
+      const trimmed: string | undefined = editValue.trim() || undefined;
+      updates.detail = trimmed ?? '';
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, detail: trimmed } : todo)),
+      );
+    } else if (editingField === 'est') {
+      const est: number = Math.max(1, parseInt(editValue || '0', 10));
+      updates.estMin = est;
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, estMin: est } : todo)),
+      );
+    } else if (editingField === 'actual') {
+      const actual: number = Math.max(0, parseInt(editValue || '0', 10));
+      updates.actualMin = actual;
+      updates.lastWorkedAt = Date.now();
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, actualMin: actual, lastWorkedAt: Date.now() } : todo)),
+      );
+    } else if (editingField === 'deadline') {
+      const deadline: number | undefined = parseDeadline(editValue);
+      if (editValue.trim() && deadline === undefined) {
+        alert('締切は YYYY-MM-DD 形式');
+        return;
+      }
+      updates.deadline = deadline;
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, deadline } : todo)),
+      );
+    }
+
+    log('edit:save:ok', { id, field: editingField, value: editValue });
+    setEditingId(null);
+    setEditingField(null);
+
+    await fetch('/api/todos/' + id, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates }),
+    });
+  }
+
+  /**
+   * カードの展開/折り畳みをトグルする
+   * 展開時にそのタスクの作業ログをAPIから取得する
+   * @param todoId - 対象タスクのID
+   */
+  async function toggleExpand(todoId: string): Promise<void> {
+    if (expandedId === todoId) {
+      setExpandedId(null);
+      return;
+    }
+    setExpandedId(todoId);
+    const res: Response = await fetch('/api/todos/' + todoId + '/logs');
+    const data: WorkLog[] = await res.json();
+    setWorkLogs((prev) => ({ ...prev, [todoId]: data }));
+  }
+
+  /**
+   * 展開中のタスクに作業ログを追加する
+   * @param todoId - 対象タスクのID
+   */
+  async function addWorkLog(todoId: string): Promise<void> {
+    const content: string = logInput.trim();
+    if (!content) {
+      return;
+    }
+    const dateOverride: string = actualDateInputs[todoId] ?? '';
+    const res: Response = await fetch('/api/todos/' + todoId + '/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content, date: dateOverride || undefined }),
+    });
+    const newLog: WorkLog = await res.json();
+    setWorkLogs((prev) => ({
+      ...prev,
+      [todoId]: [newLog, ...(prev[todoId] ?? [])],
+    }));
+    setLogInput('');
+    setActualDateInputs((prev) => ({ ...prev, [todoId]: '' }));
+    log('workLog:add', { todoId, content });
+  }
+
+  // --- Render ---
+
+  if (loading) {
+    return (
+      <main className={styles.main}>
+        <p>読み込み中...</p>
+      </main>
+    );
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: '#0b0b0c', padding: 24, color: 'white' }}>
-      <header style={{ marginBottom: 16 }}>
-        <h1 style={{ fontSize: 22, margin: 0 }}>Daily ToDo（Interactive Mock）</h1>
-        <p style={{ margin: '6px 0 0', color: '#9ca3af' }}>
-          追加 / 実績ログ / 完了 / 削除まで触れる。保存と日次リセットは次。
-        </p>
+    <main className={styles.main}>
+      <header className={styles.topBar}>
+        <h1 className={styles.headerTitle}>
+          {activeTab === 'tasks' ? 'タスク' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
+        </h1>
+        <div className={styles.userBar}>
+          <span className={styles.userName}>{user.name}</span>
+          <button type="button" onClick={onLogout} className={styles.iconBtn}>
+            ログアウト
+          </button>
+        </div>
+        <button
+          type="button"
+          className={styles.hamburgerBtn}
+          onClick={() => setMenuOpen(!menuOpen)}
+          aria-label="メニュー"
+        >
+          <span className={styles.hamburgerLine} />
+          <span className={styles.hamburgerLine} />
+          <span className={styles.hamburgerLine} />
+        </button>
       </header>
 
-      <section style={{ display: 'grid', gap: 10, marginBottom: 18, maxWidth: 720 }}>
+      {/* ハンバーガーメニュー */}
+      {menuOpen && (
+        <div className={styles.menuOverlay} onClick={() => setMenuOpen(false)}>
+          <nav className={styles.menuPanel} onClick={(e) => e.stopPropagation()}>
+            {/* --- タスク管理グループ --- */}
+            <div className={styles.menuGroupLabel}>タスク管理</div>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'tasks' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }}
+            >
+              タスク
+            </button>
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={() => setTaskMenuOpen(!taskMenuOpen)}
+            >
+              その他 {taskMenuOpen ? '▾' : '▸'}
+            </button>
+            {taskMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'task-sets' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('task-sets'); setMenuOpen(false); }}
+                >
+                  タスクセット
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'matrix' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('matrix'); setMenuOpen(false); }}
+                >
+                  アイゼンハワーマトリクス
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'recurring' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('recurring'); setMenuOpen(false); }}
+                >
+                  繰り返しタスク
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'archived' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('archived'); setMenuOpen(false); }}
+                >
+                  削除したタスク
+                </button>
+              </>
+            )}
+
+            {/* --- 記録グループ --- */}
+            <div className={styles.menuGroupLabel}>記録</div>
+            <button
+              type="button"
+              className={styles.menuItem}
+              onClick={() => setDiaryMenuOpen(!diaryMenuOpen)}
+            >
+              日記 {diaryMenuOpen ? '▾' : '▸'}
+            </button>
+            {diaryMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'diary-write' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('diary-write'); setMenuOpen(false); }}
+                >
+                  書く
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'diary-view' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('diary-view'); setMenuOpen(false); }}
+                >
+                  履歴
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'diary-public' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('diary-public'); setMenuOpen(false); }}
+                >
+                  みんなの日記
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'activity' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('activity'); setMenuOpen(false); }}
+            >
+              作業記録
+            </button>
+
+            {/* --- アカウントグループ --- */}
+            <div className={styles.menuGroupLabel}>アカウント</div>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'mypage' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('mypage'); setMenuOpen(false); }}
+            >
+              マイページ
+            </button>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'settings' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('settings'); setMenuOpen(false); }}
+            >
+              設定
+            </button>
+
+            {/* --- サポートグループ --- */}
+            <div className={styles.menuGroupLabel}>サポート</div>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'help' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('help'); setMenuOpen(false); }}
+            >
+              ヘルプ
+            </button>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'bug-report' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('bug-report'); setMenuOpen(false); }}
+            >
+              バグ報告
+            </button>
+            {user.role === 'admin' && (
+              <button
+                type="button"
+                className={`${styles.menuItem} ${activeTab === 'admin' ? styles.menuItemActive : ''}`}
+                onClick={() => { setActiveTab('admin'); setMenuOpen(false); }}
+              >
+                管理
+              </button>
+            )}
+          </nav>
+        </div>
+      )}
+
+      {(activeTab === 'tasks' || activeTab === 'task-sets' || activeTab === 'recurring') && (
+      <>
+      <div className={styles.diaryModeBar}>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${activeTab === 'tasks' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setActiveTab('tasks')}
+        >
+          タスク
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${activeTab === 'task-sets' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setActiveTab('task-sets')}
+        >
+          タスクセット
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${activeTab === 'recurring' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setActiveTab('recurring')}
+        >
+          繰り返し
+        </button>
+      </div>
+      </>
+      )}
+
+      {activeTab === 'tasks' && (
+      <div onClickCapture={(e) => {
+        // カード内部のクリックでなければ展開を閉じる
+        const target = e.target as HTMLElement;
+        if (!target.closest('article') && !dragId && !isDraggingRef.current) {
+          setExpandedId(null);
+        }
+      }}>
+      {/* Add form */}
+      <section className={styles.addForm}>
+        <label className={styles.fieldLabel}>タスク名</label>
         <input
-          placeholder="タスク名"
+          data-tutorial="task-title-input"
+          placeholder="例: レポートを書く"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          style={inputStyle()}
+          className={styles.input}
         />
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <input
-            placeholder="予定(分) 例: 60"
-            value={estText}
-            onChange={(e) => setEstText(e.target.value)}
-            style={inputStyle()}
-          />
-          <select value={mode} onChange={(e) => setMode(e.target.value as Recurrence)} style={inputStyle()}>
-            <option value="carry">持ち越し</option>
-            <option value="daily">日次</option>
-          </select>
-          <input
-            placeholder="締切 YYYY-MM-DD HH:mm（任意）"
-            value={deadlineText}
-            onChange={(e) => setDeadlineText(e.target.value)}
-            style={inputStyle()}
-          />
-        </div>
+        <label className={styles.fieldLabel}>詳細（任意）</label>
+        <textarea
+          placeholder="例: 第3章の結論部分を仕上げる"
+          value={detailText}
+          onChange={(e) => setDetailText(e.target.value)}
+          className={styles.textarea}
+          rows={2}
+        />
+        <div className={styles.addFormRow}>
+          <div>
+            <label className={styles.fieldLabel}>予定時間（分）</label>
+            <input
+              placeholder="例: 60"
+              value={estText}
+              onChange={(e) => setEstText(e.target.value)}
+              className={styles.input}
+            />
+          </div>
+          <div>
+            <label className={styles.fieldLabel}>繰り返し</label>
+            <select
+              value={mode}
+              onChange={(e) => {
+                const v: string = e.target.value;
+                setMode(v);
+                if (v === 'custom') {
+                  setCustomUnit('week');
+                  setCustomInterval('1');
+                  setCustomWeekDays(['mon']);
+                }
+              }}
+              className={styles.input}
+            >
+              <option value="carry">繰り返さない</option>
+              <option value="day">毎日</option>
+              <option value="week:weekday">毎週平日（月〜金）</option>
+              <option value="week:mon">毎週月曜日</option>
+              <option value="month:same-date">毎月同じ日</option>
+              <option value="year">毎年同じ日</option>
+              <option value="custom">カスタム...</option>
+            </select>
+            {mode === 'custom' && (
+              <div style={{ display: 'grid', gap: 6, marginTop: 6, padding: 10, border: '1px solid var(--input-border)', borderRadius: 8, background: 'var(--background)' }}>
+                {/* n ごと */}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span>繰り返す間隔:</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={customInterval}
+                    onChange={(e) => setCustomInterval(e.target.value)}
+                    className={styles.inputNarrow}
+                    style={{ width: 50 }}
+                  />
+                  <select
+                    value={customUnit}
+                    onChange={(e) => setCustomUnit(e.target.value)}
+                    className={styles.input}
+                    style={{ width: 80 }}
+                  >
+                    <option value="day">日</option>
+                    <option value="week">週</option>
+                    <option value="month">月</option>
+                    <option value="year">年</option>
+                  </select>
+                  <span>ごと</span>
+                </div>
 
-        <button onClick={addTodo} style={primaryBtnStyle()}>
+                {/* 週の場合：曜日複数選択 */}
+                {customUnit === 'week' && (
+                  <div>
+                    <label className={styles.fieldLabel}>曜日</label>
+                    <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      {[
+                        { key: 'mon', label: '月' },
+                        { key: 'tue', label: '火' },
+                        { key: 'wed', label: '水' },
+                        { key: 'thu', label: '木' },
+                        { key: 'fri', label: '金' },
+                        { key: 'sat', label: '土' },
+                        { key: 'sun', label: '日' },
+                      ].map((d) => {
+                        const selected: boolean = customWeekDays.includes(d.key);
+                        return (
+                          <button
+                            key={d.key}
+                            type="button"
+                            className={selected ? styles.primaryBtn : styles.iconBtn}
+                            style={{ width: 36, height: 36, padding: 0, fontSize: 13, borderRadius: '50%' }}
+                            onClick={() => {
+                              if (selected) {
+                                if (customWeekDays.length > 1) {
+                                  setCustomWeekDays(customWeekDays.filter((k) => k !== d.key));
+                                }
+                              } else {
+                                setCustomWeekDays([...customWeekDays, d.key]);
+                              }
+                            }}
+                          >
+                            {d.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 月の場合：毎月n日 or 第ny曜日 */}
+                {customUnit === 'month' && (
+                  <div style={{ display: 'grid', gap: 6 }}>
+                    <select
+                      value={customMonthMode}
+                      onChange={(e) => setCustomMonthMode(e.target.value as 'date' | 'weekday')}
+                      className={styles.input}
+                      style={{ width: 200 }}
+                    >
+                      <option value="date">毎月○日</option>
+                      <option value="weekday">毎月第○曜日</option>
+                    </select>
+                    {customMonthMode === 'date' && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span>毎月</span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={customMonthDay}
+                          onChange={(e) => setCustomMonthDay(e.target.value)}
+                          className={styles.inputNarrow}
+                          style={{ width: 50 }}
+                        />
+                        <span>日</span>
+                      </div>
+                    )}
+                    {customMonthMode === 'weekday' && (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span>第</span>
+                        <select
+                          value={customMonthNth}
+                          onChange={(e) => setCustomMonthNth(e.target.value)}
+                          className={styles.input}
+                          style={{ width: 50 }}
+                        >
+                          <option value="1">1</option>
+                          <option value="2">2</option>
+                          <option value="3">3</option>
+                          <option value="4">4</option>
+                        </select>
+                        <select
+                          value={customMonthNthDay}
+                          onChange={(e) => setCustomMonthNthDay(e.target.value)}
+                          className={styles.input}
+                          style={{ width: 80 }}
+                        >
+                          <option value="mon">月曜日</option>
+                          <option value="tue">火曜日</option>
+                          <option value="wed">水曜日</option>
+                          <option value="thu">木曜日</option>
+                          <option value="fri">金曜日</option>
+                          <option value="sat">土曜日</option>
+                          <option value="sun">日曜日</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <div>
+            <label className={styles.fieldLabel}>締切（任意）</label>
+            <input
+              type="date"
+              value={deadlineText}
+              onChange={(e) => setDeadlineText(e.target.value)}
+              className={styles.input}
+            />
+          </div>
+        </div>
+        <button data-tutorial="task-add-btn" type="button" onClick={addTodo} className={styles.primaryBtn}>
           追加
         </button>
-
-        <p style={{ color: '#9ca3af', margin: 0, fontSize: 12 }}>
-          締切は「2026-02-11 18:30」みたいに入力。未入力は「今日中」扱い。
-        </p>
       </section>
 
-      <section style={{ display: 'grid', gap: 12, maxWidth: 720 }}>
-        {sorted.map((t) => {
-          const c = checklist(t);
+      {/* 凡例 + 表示切替 */}
+      <div className={styles.legendRow}>
+        <div className={styles.legend}>
+          <span className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ background: '#ef4444' }} />
+            リスクあり({legendCounts.danger})
+          </span>
+          <span className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ background: '#3b82f6' }} />
+            進行中({legendCounts.inProgress})
+          </span>
+          <span className={styles.legendItem}>
+            <span className={styles.legendDot} style={{ background: '#22c55e' }} />
+            完了({legendCounts.done})
+          </span>
+        </div>
+        <div data-tutorial="view-mode-buttons" className={styles.viewModeButtons}>
+          {legendCounts.done > 0 && (
+            <button
+              type="button"
+              className={styles.dangerIconBtn}
+              onClick={removeAllDone}
+              title="完了タスクを全消去"
+              style={{ fontSize: '12px', padding: '4px 8px' }}
+            >
+              完了を消去
+            </button>
+          )}
+          {todos.length > 0 && (
+            <button
+              type="button"
+              className={styles.dangerIconBtn}
+              onClick={removeAllTodos}
+              title="全タスクを削除"
+              style={{ fontSize: '12px', padding: '4px 8px', marginRight: '8px' }}
+            >
+              全削除
+            </button>
+          )}
+          <button
+            type="button"
+            className={`${styles.viewModeBtn} ${viewMode === 'detail' ? styles.viewModeBtnActive : ''}`}
+            onClick={() => { setViewMode('detail'); notifyTutorialAction('changeViewMode'); }}
+            title="詳細表示"
+          >
+            ☰
+          </button>
+          <button
+            type="button"
+            className={`${styles.viewModeBtn} ${viewMode === 'compact' ? styles.viewModeBtnActive : ''}`}
+            onClick={() => { setViewMode('compact'); notifyTutorialAction('changeViewMode'); }}
+            title="コンパクト表示"
+          >
+            ≡
+          </button>
+          <button
+            type="button"
+            className={`${styles.viewModeBtn} ${viewMode === 'grid' ? styles.viewModeBtnActive : ''}`}
+            onClick={() => { setViewMode('grid'); notifyTutorialAction('changeViewMode'); }}
+            title="グリッド表示"
+          >
+            ⊞
+          </button>
+        </div>
+      </div>
+
+      {/* ルートに戻すドロップゾーン（常にDOMに存在、ドラッグ中のみ表示） */}
+      <div
+        className={styles.rootDropZone}
+        style={{ display: dragId ? 'block' : 'none', background: dragOverId === '__root__' ? '#3b82f6' : undefined }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragOverId('__root__');
+          setDragOverMode('between');
+        }}
+        onDragLeave={() => {
+          if (dragOverId === '__root__') {
+            setDragOverId(null);
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (dragId) {
+            changeParent(dragId, null);
+          }
+          isDraggingRef.current = false;
+          setDragId(null);
+          setDragOverId(null);
+          setDragOverMode(null);
+        }}
+      >
+        親との階層化を解除
+      </div>
+
+      {/* Todo list — detail (既存の詳細表示) */}
+      {viewMode === 'detail' && <section data-tutorial="task-list" className={`${styles.todoList} ${dragId ? styles.todoListDragging : ''}`}>
+        {treeList.map(({ todo: t, depth }, idx) => {
+          const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+          const isEditingThis: boolean = editingId === t.id;
+          const isExpanded: boolean = expandedId === t.id;
+          const isDragOverChild: boolean = dragOverId === t.id && dragOverMode === 'child' && dragId !== t.id;
+          // カード間ドロップゾーンのハイライト（カードの上の隙間 = idx、下の隙間 = idx+1）
+          const isBetweenActive: boolean = dropBetweenIndex === idx && dragId !== t.id;
+          const isAfterActive: boolean = dropBetweenIndex === (idx + 1) && dragId !== t.id;
 
           return (
+            <div key={t.id}>
+              {/* カード間ドロップゾーン（常にDOMに存在） */}
+              <div
+                className={`${styles.dropZone} ${isBetweenActive ? styles.dropZoneActive : ''}`}
+                style={{ marginLeft: depth > 0 ? 21 : 0, display: dragId ? 'block' : 'none' }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropBetweenIndex(idx);
+                  setDragOverId(null);
+                  setDragOverMode('between');
+                }}
+                onDragLeave={() => {
+                  if (dropBetweenIndex === idx) {
+                    setDropBetweenIndex(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragId) {
+                    const newParentId: string | null = t.parentId ?? null;
+                    const newOrder: number = t.sortOrder - 1;
+                    setTodos((prev) =>
+                      prev.map((todo) => (todo.id === dragId
+                        ? { ...todo, parentId: newParentId ?? undefined, sortOrder: newOrder }
+                        : todo)),
+                    );
+                    fetch('/api/todos/' + dragId, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
+                    });
+                  }
+                  isDraggingRef.current = false;
+                  setDragId(null);
+                  setDragOverId(null);
+                  setDragOverMode(null);
+                  setDropBetweenIndex(null);
+                }}
+              />
+            <div className={`${styles.cardRow} ${depth > 0 ? styles.cardRowNested : ''}`} style={depth > 0 ? { marginLeft: depth * 16 } : {}}>
+              {/* 左ドロップゾーン（常にDOMに存在、ドラッグ中かつ子タスクのみ表示） */}
+              <div
+                className={`${styles.unparentDropZone} ${dragOverId === ('unparent-' + t.id) ? styles.unparentDropZoneActive : ''}`}
+                style={{ display: (dragId && dragId !== t.id && depth > 0) ? 'flex' : 'none' }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDragOverId('unparent-' + t.id);
+                  setDragOverMode('between');
+                }}
+                onDragLeave={() => {
+                  if (dragOverId === ('unparent-' + t.id)) {
+                    setDragOverId(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragId) {
+                    const thisTask: Todo | undefined = todos.find((todo) => todo.id === t.id);
+                    const parentTask: Todo | undefined = thisTask?.parentId ? todos.find((todo) => todo.id === thisTask.parentId) : undefined;
+                    const grandParentId: string | null = parentTask?.parentId ?? null;
+                    changeParent(dragId, grandParentId);
+                  }
+                  isDraggingRef.current = false;
+                  setDragId(null);
+                  setDragOverId(null);
+                  setDragOverMode(null);
+                }}
+                title="階層を上げる"
+              >
+                ←
+              </div>
             <article
-              key={t.id}
-              style={{
-                background: cardBg(t),
-                borderRadius: 12,
-                padding: '10px 12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
+              className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''}`}
+              style={{ fontSize: Math.pow(0.9, depth) + 'em', flex: 1 }}
+              onClick={() => {
+                if (!isDraggingRef.current) {
+                  setSelectedId(t.id);
+                  toggleExpand(t.id);
+                }
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!dragId || dragId === t.id) {
+                  return;
+                }
+                const rect: DOMRect = e.currentTarget.getBoundingClientRect();
+                const third: number = rect.height / 3;
+                const relY: number = e.clientY - rect.top;
+                if (relY < third) {
+                  setDragOverId(null);
+                  setDragOverMode('between');
+                  setDropBetweenIndex(idx);
+                } else if (relY > rect.height - third) {
+                  setDragOverId(null);
+                  setDragOverMode('between');
+                  setDropBetweenIndex(idx + 1);
+                } else {
+                  setDragOverId(t.id);
+                  setDragOverMode('child');
+                  setDropBetweenIndex(null);
+                }
+              }}
+              onDragLeave={() => {
+                if (dragOverId === t.id) {
+                  setDragOverId(null);
+                  setDragOverMode(null);
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                if (dragId && dragId !== t.id) {
+                  if (dragOverMode === 'child') {
+                    changeParent(dragId, t.id);
+                  } else {
+                    const newParentId: string | null = t.parentId ?? null;
+                    const isBefore: boolean = dropBetweenIndex === idx;
+                    const newOrder: number = isBefore ? t.sortOrder - 1 : t.sortOrder + 1;
+                    setTodos((prev) =>
+                      prev.map((todo) => (todo.id === dragId
+                        ? { ...todo, parentId: newParentId ?? undefined, sortOrder: newOrder }
+                        : todo)),
+                    );
+                    fetch('/api/todos/' + dragId, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
+                    });
+                  }
+                }
+                isDraggingRef.current = false;
+                setDragId(null);
+                setDragOverId(null);
+                setDragOverMode(null);
+                setDropBetweenIndex(null);
+              }}
+              onDragEnd={() => {
+                isDraggingRef.current = false;
+                setDragId(null);
+                setDragOverId(null);
+                setDragOverMode(null);
+                setDropBetweenIndex(null);
               }}
             >
-              {/* 左：タイトル＋進捗 */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {t.title}
+              {/* ドラッグハンドル */}
+              <DragHandle
+                onDragStart={(e) => {
+                  isDraggingRef.current = true;
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', t.id);
+                  requestAnimationFrame(() => {
+                    setDragId(t.id);
+                  });
+                }}
+                onDragEnd={() => {
+                  isDraggingRef.current = false;
+                  setDragId(null);
+                  setDragOverId(null);
+                  setDragOverMode(null);
+                  setDropBetweenIndex(null);
+                }}
+              />
+              {/* Checkbox */}
+              <input
+                type="checkbox"
+                checked={t.done}
+                onChange={() => toggleDone(t.id)}
+                title={t.done ? '完了を取り消す' : '完了にする'}
+                className={styles.checkbox}
+              />
+
+              {/* Title & progress */}
+              <div className={styles.cardLeft}>
+                {/* タイトル */}
+                {isEditingThis && editingField === 'title' ? (
+                  <input
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        saveFieldEdit(t.id);
+                      }
+                      if (e.key === 'Escape') {
+                        cancelFieldEdit();
+                      }
+                    }}
+                    onBlur={() => saveFieldEdit(t.id)}
+                    className={styles.inlineInput}
+                    autoFocus
+                  />
+                ) : (
+                  <div
+                    className={`${styles.taskTitle} ${t.done ? styles.taskTitleDone : ''}`}
+                    onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'title'); }}
+                    title="ダブルクリックで編集"
+                  >
+                    {t.title}
+                  </div>
+                )}
+
+                {/* 詳細 */}
+                {isEditingThis && editingField === 'detail' ? (
+                  <textarea
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        cancelFieldEdit();
+                      }
+                    }}
+                    onBlur={() => saveFieldEdit(t.id)}
+                    className={styles.textarea}
+                    rows={2}
+                    autoFocus
+                  />
+                ) : (
+                  <div
+                    className={`${styles.taskDetail} ${isExpanded ? styles.taskDetailExpanded : ''}`}
+                    onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'detail'); }}
+                    title="ダブルクリックで編集"
+                  >
+                    {t.detail || '詳細なし'}
+                  </div>
+                )}
+
+                {/* 予定 / 実績 */}
+                <div className={`${styles.taskProgress} ${t.done ? styles.taskProgressDone : ''}`}>
+                  {isEditingThis && editingField === 'est' ? (
+                    <span>
+                      予定{' '}
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            saveFieldEdit(t.id);
+                          }
+                          if (e.key === 'Escape') {
+                            cancelFieldEdit();
+                          }
+                        }}
+                        onBlur={() => saveFieldEdit(t.id)}
+                        className={styles.inlineInputNarrow}
+                        autoFocus
+                      />
+                      分
+                    </span>
+                  ) : (
+                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'est'); }} title="ダブルクリックで予定を編集">
+                      予定 {minutesToText(t.estMin)}
+                    </span>
+                  )}
+                  {' / '}
+                  {isEditingThis && editingField === 'actual' ? (
+                    <span>
+                      実績{' '}
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            saveFieldEdit(t.id);
+                          }
+                          if (e.key === 'Escape') {
+                            cancelFieldEdit();
+                          }
+                        }}
+                        onBlur={() => saveFieldEdit(t.id)}
+                        className={styles.inlineInputNarrow}
+                        autoFocus
+                      />
+                      分
+                    </span>
+                  ) : (
+                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'actual'); }} title="ダブルクリックで実績を編集">
+                      実績 {minutesToText(t.actualMin)}
+                    </span>
+                  )}
                 </div>
-                <div style={{ fontSize: 12, color: '#d1d5db' }}>
-                  予定 {minutesToText(t.estMin)} / 実績 {minutesToText(t.actualMin)}
-                </div>
-                {/* 中央：期限・状態 */}
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={metaPill()}>
-                    ⏰ {formatDeadline(t.deadline)}
-                  </span>
-                  <span style={badgeStyle(c.okDeadline)}>期限</span>
-                  <span style={badgeStyle(c.okStuck)}>詰まり</span>
-                  <span style={badgeStyle(c.okNotIdle)}>未着手</span>
-                </div>
+
               </div>
-              {/* 右：操作 */}
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button onClick={() => addLog(t.id)} style={iconBtn()}>
+
+              {/* 期限 */}
+              {isEditingThis && editingField === 'deadline' ? (
+                <div className={styles.taskDeadlineBig} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="date"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => saveFieldEdit(t.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        saveFieldEdit(t.id);
+                      }
+                      if (e.key === 'Escape') {
+                        cancelFieldEdit();
+                      }
+                    }}
+                    className={styles.inputDate}
+                    autoFocus
+                  />
+                </div>
+              ) : (
+                <div
+                  className={styles.taskDeadlineBig}
+                  onClick={(e) => e.stopPropagation()}
+                  onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'deadline'); }}
+                  title="ダブルクリックで期限を編集"
+                >
+                  ⏰ {formatDeadline(t.deadline)}
+                </div>
+              )}
+
+              {/* 着手/未着手バッジ（クリックで切り替え） */}
+              {!t.done && (
+                <span
+                  className={t.started ? styles.badgeOk : styles.badgeNg}
+                  style={{ cursor: 'pointer' }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const newStarted: boolean = !t.started;
+                    setTodos((prev) =>
+                      prev.map((todo) => (todo.id === t.id ? { ...todo, started: newStarted } : todo)),
+                    );
+                    fetch('/api/todos/' + t.id, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates: { started: newStarted } }),
+                    });
+                  }}
+                >
+                  {t.started ? '着手' : '未着手'}
+                </span>
+              )}
+
+              {/* Right: actions */}
+              <div className={styles.actions}>
+                <div className={styles.actionField}>
+                  <label className={styles.fieldLabel}>実績(分)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="分"
+                    value={actualInputs[t.id] ?? ''}
+                    onChange={(e) =>
+                      setActualInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
+                    }
+                    className={styles.inputNarrow}
+                    disabled={t.done}
+                  />
+                </div>
+                <button onClick={() => addLog(t.id)} className={styles.iconBtn} disabled={t.done}>
                   実績
                 </button>
-                <button onClick={() => markDone(t.id)} style={iconBtn()}>
-                  ✔
-                </button>
-                <button onClick={() => removeTodo(t.id)} style={dangerIconBtn()}>
+                {t.parentId && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); changeParent(t.id, null); }}
+                    className={styles.iconBtn}
+                    title="ルートに戻す"
+                  >
+                    ↑
+                  </button>
+                )}
+                <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
+              </div>
+
+              {/* 展開時のアクション */}
+              {isExpanded && renderExpandedContent(t)}
+            </article>
+            </div>
+              {/* カード下のドロップゾーン */}
+              <div
+                className={`${styles.dropZone} ${isAfterActive ? styles.dropZoneActive : ''}`}
+                style={{ marginLeft: depth > 0 ? 21 : 0, display: dragId ? 'block' : 'none' }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setDropBetweenIndex(idx + 1);
+                  setDragOverId(null);
+                  setDragOverMode('between');
+                }}
+                onDragLeave={() => {
+                  if (dropBetweenIndex === idx + 1) {
+                    setDropBetweenIndex(null);
+                  }
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragId) {
+                    const newParentId: string | null = t.parentId ?? null;
+                    const newOrder: number = t.sortOrder + 1;
+                    setTodos((prev) =>
+                      prev.map((todo) => (todo.id === dragId
+                        ? { ...todo, parentId: newParentId ?? undefined, sortOrder: newOrder }
+                        : todo)),
+                    );
+                    fetch('/api/todos/' + dragId, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
+                    });
+                  }
+                  isDraggingRef.current = false;
+                  setDragId(null);
+                  setDragOverId(null);
+                  setDragOverMode(null);
+                  setDropBetweenIndex(null);
+                }}
+              />
+            </div>
+          );
+        })}
+      </section>}
+
+      {/* Todo list — compact（タスク名+期限+階層+詳細展開） */}
+      {viewMode === 'compact' && (
+        <section className={styles.todoListCompact}>
+          {treeList.map(({ todo: t, depth }) => {
+            const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+            const isExpanded: boolean = expandedId === t.id;
+            const isEditingDeadline: boolean = editingId === t.id && editingField === 'deadline';
+            return (
+              <div
+                key={t.id}
+                className={`${styles.compactCard} ${styles[bgClass]} ${isExpanded ? styles.compactCardExpanded : ''}`}
+                style={{ paddingLeft: depth * 24 + 8 }}
+                onClick={() => {
+                  if (expandedId === t.id) {
+                    setExpandedId(null);
+                  } else {
+                    setExpandedId(t.id);
+                  }
+                }}
+              >
+                <div className={styles.compactCardRow}>
+                  <input
+                    type="checkbox"
+                    checked={t.done}
+                    onChange={() => toggleDone(t.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className={styles.checkbox}
+                  />
+                  <span className={styles.compactTitle}>{t.title}</span>
+                  {isEditingDeadline ? (
+                    <input
+                      type="date"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => {
+                        saveFieldEdit(t.id);
+                        setEditingId(null);
+                        setEditingField(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          saveFieldEdit(t.id);
+                          setEditingId(null);
+                          setEditingField(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingId(null);
+                          setEditingField(null);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={styles.inputNarrow}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className={styles.compactDeadline}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(t.id);
+                        setEditingField('deadline');
+                        setEditValue(t.deadline ? toInputDeadline(t.deadline) : '');
+                      }}
+                      title="クリックで期限を変更"
+                    >
+                      {t.deadline ? formatDeadline(t.deadline) : '—'}
+                    </span>
+                  )}
+                  <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
+                </div>
+                {isExpanded && renderExpandedContent(t)}
+              </div>
+            );
+          })}
+        </section>
+      )}
+
+      {/* Todo list — grid（コンパクト+横2列） */}
+      {viewMode === 'grid' && (
+        <section className={styles.todoListGrid}>
+          {treeList.map(({ todo: t, depth }) => {
+            const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+            const isEditingDeadline: boolean = editingId === t.id && editingField === 'deadline';
+            return (
+              <div
+                key={t.id}
+                className={`${styles.compactCard} ${styles[bgClass]}`}
+                style={{ paddingLeft: depth * 16 + 8 }}
+              >
+                <input
+                  type="checkbox"
+                  checked={t.done}
+                  onChange={() => toggleDone(t.id)}
+                  className={styles.checkbox}
+                />
+                <span className={styles.compactTitle}>{t.title}</span>
+                {isEditingDeadline ? (
+                  <input
+                    type="date"
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={() => {
+                      saveFieldEdit(t.id);
+                      setEditingId(null);
+                      setEditingField(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        saveFieldEdit(t.id);
+                        setEditingId(null);
+                        setEditingField(null);
+                      } else if (e.key === 'Escape') {
+                        setEditingId(null);
+                        setEditingField(null);
+                      }
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                    className={styles.inputNarrow}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    className={styles.compactDeadline}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingId(t.id);
+                      setEditingField('deadline');
+                      setEditValue(t.deadline ? toInputDeadline(t.deadline) : '');
+                    }}
+                    title="クリックで期限を変更"
+                  >
+                    {t.deadline ? formatDeadline(t.deadline) : '—'}
+                  </span>
+                )}
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeTodoWithUndo(t.id); }}
+                  className={styles.dangerIconBtn}
+                  title="削除"
+                >
                   🗑
                 </button>
               </div>
-            </article>
-          );
-        })}
-      </section>
+            );
+          })}
+        </section>
+      )}
+
+      {/* Undo toasts */}
+      <div className={styles.toastContainer}>
+        {undoToasts.map((t) => (
+          <div key={t.toastId} className={styles.toast}>
+            <div className={styles.toastMessage}>{t.message}</div>
+            <button onClick={t.undo} className={styles.iconBtn}>
+              {t.undoLabel ?? '取り消す'}
+            </button>
+          </div>
+        ))}
+      </div>
+      </div>
+      )}
+
+      {activeTab === 'task-sets' && (
+        <TaskSetPanel
+          user={user}
+          onApply={async (items) => {
+            const minOrder: number = todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) : 0;
+            for (let i: number = 0; i < items.length; i++) {
+              const deadlineTs: number | undefined = items[i].deadline ? new Date(items[i].deadline + 'T23:59:59').getTime() : undefined;
+              const todo = {
+                id: uid(),
+                title: items[i].title,
+                detail: items[i].detail,
+                estMin: items[i].estMin,
+                actualMin: 0,
+                stuckHours: 0,
+                deadline: deadlineTs,
+                recurrence: items[i].recurrence as string,
+                started: false,
+                done: false,
+                sortOrder: minOrder - items.length + i,
+              };
+              setTodos((prev) => [...prev, todo]);
+              await fetch('/api/todos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id, todo }),
+              });
+            }
+            setActiveTab('tasks');
+            log('taskSet:applied', { count: items.length });
+          }}
+        />
+      )}
+
+      {activeTab === 'matrix' && (
+        <MatrixPanel todos={todos} user={user} />
+      )}
+
+      {activeTab === 'activity' && (
+        <ActivityPanel user={user} />
+      )}
+
+      {activeTab === 'archived' && (
+        <ArchivedTodosPanel user={user} onRestore={fetchTodos} />
+      )}
+
+      {activeTab === 'recurring' && (
+        <RecurringPanel user={user} onRefresh={fetchTodos} />
+      )}
+
+      {(activeTab === 'diary-write' || activeTab === 'diary-view' || activeTab === 'diary-public') && (
+        <>
+          <div className={styles.diaryModeBar}>
+            <button
+              type="button"
+              className={`${styles.diaryModeBtn} ${activeTab === 'diary-write' ? styles.diaryModeBtnActive : ''}`}
+              onClick={() => setActiveTab('diary-write')}
+            >
+              書く
+            </button>
+            <button
+              type="button"
+              className={`${styles.diaryModeBtn} ${activeTab === 'diary-view' ? styles.diaryModeBtnActive : ''}`}
+              onClick={() => setActiveTab('diary-view')}
+            >
+              履歴
+            </button>
+            <button
+              type="button"
+              className={`${styles.diaryModeBtn} ${activeTab === 'diary-public' ? styles.diaryModeBtnActive : ''}`}
+              onClick={() => setActiveTab('diary-public')}
+            >
+              みんなの日記
+            </button>
+          </div>
+          {activeTab === 'diary-write' && <DiaryWritePanel user={user} />}
+          {activeTab === 'diary-view' && <DiaryViewPanel user={user} />}
+          {activeTab === 'diary-public' && <PublicDiaryPanel user={user} />}
+        </>
+      )}
+
+      {activeTab === 'mypage' && (
+        <MyPage user={user} onUserUpdate={onUserUpdate} />
+      )}
+
+      {activeTab === 'settings' && (
+        <SettingsPanel
+          settings={settings}
+          onUpdate={(updated: UserSettings) => setSettings(updated)}
+          userId={user.id}
+        />
+      )}
+
+      {activeTab === 'help' && (
+        <HelpPanel onNavigate={(tab: string, hint?: string, targetSelector?: string, stepIndex?: number) => {
+          setActiveTab(tab as typeof activeTab);
+          if (hint) {
+            setTutorialHint(hint);
+            setTutorialTarget(targetSelector ?? null);
+            setTutorialPos(null);
+            setTutorialStepIndex(stepIndex ?? null);
+            setTimeout(() => {
+              if (targetSelector) {
+                const el: Element | null = document.querySelector(targetSelector);
+                if (el) {
+                  const rect: DOMRect = el.getBoundingClientRect();
+                  setTutorialPos({
+                    top: rect.bottom + window.scrollY + 8,
+                    left: Math.max(16, Math.min(window.innerWidth - 340, rect.left + window.scrollX)),
+                  });
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }
+            }, 300);
+          }
+        }} />
+      )}
+
+      {activeTab === 'bug-report' && (
+        <BugReportPanel user={user} />
+      )}
+
+      {activeTab === 'admin' && (
+        <AdminPanel user={user} />
+      )}
+
+      {pomodoroTodo && (
+        <PomodoroTimer
+          todo={pomodoroTodo}
+          onClose={() => setPomodoroTodo(null)}
+          onAddMinutes={(minutes: number) => {
+            const id: string = pomodoroTodo.id;
+            const target: Todo | undefined = todos.find((t) => t.id === id);
+            if (!target) {
+              return;
+            }
+            const newActual: number = target.actualMin + minutes;
+            setTodos((prev) =>
+              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: Date.now() } : t)),
+            );
+            fetch('/api/todos/' + id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now() } }),
+            });
+          }}
+        />
+      )}
+
+      <ButlerAvatar todos={todos} settings={settings} />
+
+      {/* ハンズオン補助吹き出し */}
+      {tutorialHint && (
+        <>
+          {/* ターゲット要素のハイライト */}
+          {tutorialTarget && tutorialPos && (
+            <div
+              className={styles.tutorialHighlight}
+              style={{
+                top: (tutorialPos.top - 8) - (document.querySelector(tutorialTarget)?.getBoundingClientRect().height ?? 0) - 8,
+                left: document.querySelector(tutorialTarget)?.getBoundingClientRect().left ?? 0,
+                width: document.querySelector(tutorialTarget)?.getBoundingClientRect().width ?? 0,
+                height: document.querySelector(tutorialTarget)?.getBoundingClientRect().height ?? 0,
+              }}
+            />
+          )}
+          {/* 吹き出し */}
+          <div
+            className={styles.tutorialHintBubble}
+            style={tutorialPos ? {
+              position: 'absolute',
+              top: tutorialPos.top,
+              left: tutorialPos.left,
+            } : {
+              position: 'fixed',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+            }}
+          >
+            <div className={styles.tutorialHintArrow} />
+            <button
+              type="button"
+              className={styles.tutorialHintClose}
+              onClick={() => { setTutorialHint(null); setTutorialPos(null); setTutorialTarget(null); }}
+            >
+              ×
+            </button>
+            <div className={styles.tutorialHintIcon}>🎩</div>
+            <p className={styles.tutorialHintText}>{tutorialHint}</p>
+            <button
+              type="button"
+              className={styles.iconBtn}
+              style={{ fontSize: '12px', marginTop: 8 }}
+              onClick={() => { setTutorialHint(null); setTutorialPos(null); setTutorialTarget(null); setActiveTab('help'); }}
+            >
+              ← ハンズオンに戻る
+            </button>
+          </div>
+        </>
+      )}
     </main>
   );
-}
-function metaPill(): React.CSSProperties {
-  return {
-    background: '#111827',
-    border: '1px solid #1f2937',
-    borderRadius: 999,
-    padding: '4px 8px',
-    fontSize: 12,
-    color: '#e5e7eb',
-    whiteSpace: 'nowrap',
-  };
-}
-// アイコンボタン共通
-function iconBtn(): React.CSSProperties {
-  return {
-    padding: '6px 8px',
-    borderRadius: 8,
-    border: '1px solid #1f2937',
-    background: '#020617',
-    color: 'white',
-    cursor: 'pointer',
-  };
-}
-// 危険系アイコンボタン
-function dangerIconBtn(): React.CSSProperties {
-  return {
-    padding: '6px 8px',
-    borderRadius: 8,
-    border: '1px solid #7f1d1d',
-    background: '#3f0d0d',
-    color: 'white',
-    cursor: 'pointer',
-  };
 }
