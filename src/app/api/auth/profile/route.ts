@@ -17,16 +17,16 @@ interface UserRow {
  * @param request - クエリパラメータに userId を含むリクエスト
  * @returns ユーザーの公開情報
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const row: UserRow | undefined = db.prepare(
-    'SELECT id, name, email, birthday, avatar FROM users WHERE id = ?'
-  ).get(userId) as UserRow | undefined;
+  const db = await getDb();
+  const row: UserRow | undefined = await db.get<UserRow>(
+    'SELECT id, name, email, birthday, avatar FROM users WHERE id = ?', userId
+  );
 
   if (!row) {
     return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 });
@@ -62,12 +62,12 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'メールアドレスは必須です' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   // メールアドレスの重複チェック（自分以外）
-  const existing: { id: string } | undefined = db.prepare(
-    'SELECT id FROM users WHERE email = ? AND id != ?'
-  ).get(email.trim(), userId) as { id: string } | undefined;
+  const existing: { id: string } | undefined = await db.get<{ id: string }>(
+    'SELECT id FROM users WHERE email = ? AND id != ?', email.trim(), userId
+  );
 
   if (existing) {
     return NextResponse.json({ error: 'このメールアドレスは既に使用されています' }, { status: 409 });
@@ -76,9 +76,10 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   const birthdayValue: string | null = birthday?.trim() || null;
   const avatarValue: string | null = body.avatar ?? null;
 
-  db.prepare(
-    'UPDATE users SET name = ?, email = ?, birthday = ?, avatar = ? WHERE id = ?'
-  ).run(name.trim(), email.trim(), birthdayValue, avatarValue, userId);
+  await db.run(
+    'UPDATE users SET name = ?, email = ?, birthday = ?, avatar = ? WHERE id = ?',
+    name.trim(), email.trim(), birthdayValue, avatarValue, userId
+  );
 
   return NextResponse.json({
     user: {

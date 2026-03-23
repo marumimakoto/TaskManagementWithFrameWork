@@ -135,11 +135,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const today: string = todayStr();
 
   // 今日既にリフレッシュ済みかチェック
-  const user = db.prepare('SELECT last_refresh_date FROM users WHERE id = ?').get(userId) as { last_refresh_date: string | null } | undefined;
+  const user = await db.get<{ last_refresh_date: string | null }>('SELECT last_refresh_date FROM users WHERE id = ?', userId);
   if (user?.last_refresh_date === today) {
     return NextResponse.json({ refreshed: false, reason: 'already refreshed today' });
   }
@@ -147,45 +147,40 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const now: number = Date.now();
 
   // 1. 完了タスクをアーカイブに移動して削除
-  const doneTodos: TodoRow[] = db.prepare(
-    'SELECT * FROM todos WHERE user_id = ? AND done = 1'
-  ).all(userId) as TodoRow[];
-
-  const archiveStmt = db.prepare(
-    'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+  const doneTodos: TodoRow[] = await db.all<TodoRow>(
+    'SELECT * FROM todos WHERE user_id = ? AND done = 1', userId
   );
-  const deleteStmt = db.prepare('DELETE FROM todos WHERE id = ?');
 
   for (const t of doneTodos) {
-    archiveStmt.run(t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now);
-    deleteStmt.run(t.id);
+    await db.run(
+      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now
+    );
+    await db.run('DELETE FROM todos WHERE id = ?', t.id);
   }
 
   // アーカイブを100件に制限
-  db.prepare(`
+  await db.run(`
     DELETE FROM archived_todos WHERE id IN (
       SELECT id FROM archived_todos WHERE user_id = ?
       ORDER BY archived_at DESC
       LIMIT -1 OFFSET 100
     )
-  `).run(userId);
+  `, userId);
 
   // 2. 繰り返しタスクの自動追加
   // 全タスク（完了含む、削除済み除く）から繰り返し設定を持つものを取得
-  const recurringTodos: TodoRow[] = db.prepare(
-    "SELECT * FROM todos WHERE user_id = ? AND recurrence != 'carry' AND recurrence != ''"
-  ).all(userId) as TodoRow[];
+  const recurringTodos: TodoRow[] = await db.all<TodoRow>(
+    "SELECT * FROM todos WHERE user_id = ? AND recurrence != 'carry' AND recurrence != ''", userId
+  );
 
   // 既存の未完了タスクのタイトルセット
+  const existingTitleRows = await db.all<{ title: string }>('SELECT title FROM todos WHERE user_id = ? AND done = 0', userId);
   const existingTitles: Set<string> = new Set(
-    (db.prepare('SELECT title FROM todos WHERE user_id = ? AND done = 0').all(userId) as { title: string }[])
-      .map((r) => r.title)
+    existingTitleRows.map((r) => r.title)
   );
 
   let addedCount: number = 0;
-  const insertStmt = db.prepare(
-    'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  );
 
   for (const t of recurringTodos) {
     if (!shouldAddToday(t.recurrence)) {
@@ -196,13 +191,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       continue;
     }
     const newId: string = crypto.randomUUID();
-    insertStmt.run(newId, userId, t.title, t.est_min, t.recurrence, t.detail, now);
+    await db.run(
+      'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      newId, userId, t.title, t.est_min, t.recurrence, t.detail, now
+    );
     existingTitles.add(t.title);
     addedCount++;
   }
 
   // 3. last_refresh_dateを更新
-  db.prepare('UPDATE users SET last_refresh_date = ? WHERE id = ?').run(today, userId);
+  await db.run('UPDATE users SET last_refresh_date = ? WHERE id = ?', today, userId);
 
   return NextResponse.json({
     refreshed: true,

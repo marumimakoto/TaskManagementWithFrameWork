@@ -24,10 +24,10 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: '新しいパスワードは6文字以上で入力してください' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const row: { password_hash: string } | undefined = db.prepare(
-    'SELECT password_hash FROM users WHERE id = ?'
-  ).get(userId) as { password_hash: string } | undefined;
+  const db = await getDb();
+  const row: { password_hash: string } | undefined = await db.get<{ password_hash: string }>(
+    'SELECT password_hash FROM users WHERE id = ?', userId
+  );
 
   if (!row) {
     return NextResponse.json({ error: 'ユーザーが見つかりません' }, { status: 404 });
@@ -39,7 +39,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 
   const newHash: string = await bcrypt.hash(newPassword, 10);
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, userId);
+  await db.run('UPDATE users SET password_hash = ? WHERE id = ?', newHash, userId);
 
   return NextResponse.json({ ok: true });
 }

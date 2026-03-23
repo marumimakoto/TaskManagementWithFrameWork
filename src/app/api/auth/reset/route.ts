@@ -29,10 +29,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'パスワードは6文字以上で入力してください' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const row: TokenRow | undefined = db.prepare(
-    'SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0'
-  ).get(token) as TokenRow | undefined;
+  const db = await getDb();
+  const row: TokenRow | undefined = await db.get<TokenRow>(
+    'SELECT * FROM password_reset_tokens WHERE token = ? AND used = 0', token
+  );
 
   if (!row) {
     return NextResponse.json({ error: '無効なリセットリンクです' }, { status: 400 });
@@ -44,8 +44,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const newHash: string = await bcrypt.hash(newPassword, 10);
 
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, row.user_id);
-  db.prepare('UPDATE password_reset_tokens SET used = 1 WHERE id = ?').run(row.id);
+  await db.run('UPDATE users SET password_hash = ? WHERE id = ?', newHash, row.user_id);
+  await db.run('UPDATE password_reset_tokens SET used = 1 WHERE id = ?', row.id);
 
   return NextResponse.json({ ok: true });
 }

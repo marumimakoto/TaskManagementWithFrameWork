@@ -26,22 +26,23 @@ interface TaskSetItemRow {
 /**
  * ユーザーのタスクセット一覧を取得する（アイテム付き）
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const sets: TaskSetRow[] = db.prepare(
-    'SELECT * FROM task_sets WHERE user_id = ? ORDER BY created_at DESC'
-  ).all(userId) as TaskSetRow[];
+  const db = await getDb();
+  const sets: TaskSetRow[] = await db.all<TaskSetRow>(
+    'SELECT * FROM task_sets WHERE user_id = ? ORDER BY created_at DESC', userId
+  );
 
-  const result = sets.map((s: TaskSetRow) => {
-    const items: TaskSetItemRow[] = db.prepare(
-      'SELECT * FROM task_set_items WHERE set_id = ? ORDER BY sort_order ASC'
-    ).all(s.id) as TaskSetItemRow[];
-    return {
+  const result = [];
+  for (const s of sets) {
+    const items: TaskSetItemRow[] = await db.all<TaskSetItemRow>(
+      'SELECT * FROM task_set_items WHERE set_id = ? ORDER BY sort_order ASC', s.id
+    );
+    result.push({
       id: s.id,
       name: s.name,
       isPublic: s.is_public === 1,
@@ -55,8 +56,8 @@ export function GET(request: NextRequest): NextResponse {
         deadline: item.deadline || undefined,
         sortOrder: item.sort_order,
       })),
-    };
-  });
+    });
+  }
 
   return NextResponse.json(result);
 }
@@ -79,19 +80,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   // 既存セットにアイテムを追加
   if (body.setId && items && items.length > 0) {
-    const insertItem = db.prepare(
-      'INSERT INTO task_set_items (id, set_id, title, est_min, detail, recurrence, deadline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+    const maxOrder = await db.get<{ max_order: number }>(
+      'SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_set_items WHERE set_id = ?', body.setId
     );
-    const maxOrder = db.prepare(
-      'SELECT COALESCE(MAX(sort_order), -1) as max_order FROM task_set_items WHERE set_id = ?'
-    ).get(body.setId) as { max_order: number };
 
-    items.forEach((item, i: number) => {
-      insertItem.run(
+    for (let i: number = 0; i < items.length; i++) {
+      const item = items[i];
+      await db.run(
+        'INSERT INTO task_set_items (id, set_id, title, est_min, detail, recurrence, deadline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         crypto.randomUUID(),
         body.setId,
         item.title,
@@ -99,9 +99,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         item.detail ?? '',
         item.recurrence ?? 'carry',
         item.deadline ?? null,
-        maxOrder.max_order + 1 + i,
+        (maxOrder?.max_order ?? -1) + 1 + i,
       );
-    });
+    }
     return NextResponse.json({ ok: true });
   }
 
@@ -112,26 +112,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const setId: string = crypto.randomUUID();
 
-  db.prepare('INSERT INTO task_sets (id, user_id, name) VALUES (?, ?, ?)').run(setId, userId, name.trim());
+  await db.run('INSERT INTO task_sets (id, user_id, name) VALUES (?, ?, ?)', setId, userId, name.trim());
 
-  const insertItem = db.prepare(
-    'INSERT INTO task_set_items (id, set_id, title, est_min, detail, recurrence, deadline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-  );
-  const insertAll = db.transaction(() => {
-    (items ?? []).forEach((item: { title: string; estMin?: number; detail?: string; recurrence?: string; deadline?: string }, i: number) => {
-      insertItem.run(
-        crypto.randomUUID(),
-        setId,
-        item.title,
-        item.estMin ?? 30,
-        item.detail ?? '',
-        item.recurrence ?? 'carry',
-        item.deadline ?? null,
-        i,
-      );
-    });
-  });
-  insertAll();
+  for (let i: number = 0; i < (items ?? []).length; i++) {
+    const item: { title: string; estMin?: number; detail?: string; recurrence?: string; deadline?: string } = (items ?? [])[i];
+    await db.run(
+      'INSERT INTO task_set_items (id, set_id, title, est_min, detail, recurrence, deadline, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      crypto.randomUUID(),
+      setId,
+      item.title,
+      item.estMin ?? 30,
+      item.detail ?? '',
+      item.recurrence ?? 'carry',
+      item.deadline ?? null,
+      i,
+    );
+  }
 
   return NextResponse.json({ ok: true, id: setId });
   } catch (e: unknown) {

@@ -20,14 +20,14 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id }: { id: string } = await params;
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: ReplyRow[] = db.prepare(`
+  const db = await getDb();
+  const rows: ReplyRow[] = await db.all<ReplyRow>(`
     SELECT r.id, r.diary_id, r.user_id, u.name as user_name, u.avatar as user_avatar, r.content, r.created_at
     FROM diary_replies r
     JOIN users u ON r.user_id = u.id
     WHERE r.diary_id = ?
     ORDER BY r.created_at ASC
-  `).all(id) as ReplyRow[];
+  `, id);
 
   return NextResponse.json(rows);
 }
@@ -46,19 +46,20 @@ export async function POST(
     return NextResponse.json({ error: 'userId and content are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const replyId: string = crypto.randomUUID();
-  db.prepare(
-    'INSERT INTO diary_replies (id, diary_id, user_id, content) VALUES (?, ?, ?, ?)'
-  ).run(replyId, id, body.userId, body.content.trim());
+  await db.run(
+    'INSERT INTO diary_replies (id, diary_id, user_id, content) VALUES (?, ?, ?, ?)',
+    replyId, id, body.userId, body.content.trim()
+  );
 
   // ユーザー情報付きで返す
-  const row: ReplyRow = db.prepare(`
+  const row: ReplyRow | undefined = await db.get<ReplyRow>(`
     SELECT r.id, r.diary_id, r.user_id, u.name as user_name, u.avatar as user_avatar, r.content, r.created_at
     FROM diary_replies r
     JOIN users u ON r.user_id = u.id
     WHERE r.id = ?
-  `).get(replyId) as ReplyRow;
+  `, replyId);
 
   return NextResponse.json(row);
 }

@@ -20,16 +20,16 @@ interface ArchivedTodoRow {
  * @param request - クエリパラメータに userId を含むリクエスト
  * @returns アーカイブ一覧のJSON配列
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: ArchivedTodoRow[] = db.prepare(
-    'SELECT * FROM archived_todos WHERE user_id = ? ORDER BY archived_at DESC LIMIT 100'
-  ).all(userId) as ArchivedTodoRow[];
+  const db = await getDb();
+  const rows: ArchivedTodoRow[] = await db.all<ArchivedTodoRow>(
+    'SELECT * FROM archived_todos WHERE user_id = ? ORDER BY archived_at DESC LIMIT 100', userId
+  );
 
   const result = rows.map((row: ArchivedTodoRow) => ({
     id: row.id,
@@ -60,23 +60,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId and id are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
-  const row: ArchivedTodoRow | undefined = db.prepare(
-    'SELECT * FROM archived_todos WHERE id = ? AND user_id = ?'
-  ).get(id, userId) as ArchivedTodoRow | undefined;
+  const row: ArchivedTodoRow | undefined = await db.get<ArchivedTodoRow>(
+    'SELECT * FROM archived_todos WHERE id = ? AND user_id = ?', id, userId
+  );
 
   if (!row) {
     return NextResponse.json({ error: 'archived todo not found' }, { status: 404 });
   }
 
   // todosテーブルに復元
-  db.prepare(
-    'INSERT OR REPLACE INTO todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-  ).run(row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.deadline, row.done, row.created_at);
+  await db.run(
+    'INSERT OR REPLACE INTO todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.deadline, row.done, row.created_at
+  );
 
   // アーカイブから削除
-  db.prepare('DELETE FROM archived_todos WHERE id = ?').run(id);
+  await db.run('DELETE FROM archived_todos WHERE id = ?', id);
 
   return NextResponse.json({ ok: true });
 }
@@ -90,7 +91,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const result = db.prepare('DELETE FROM archived_todos WHERE user_id = ?').run(userId);
+  const db = await getDb();
+  const result = await db.run('DELETE FROM archived_todos WHERE user_id = ?', userId);
   return NextResponse.json({ ok: true, deleted: result.changes });
 }

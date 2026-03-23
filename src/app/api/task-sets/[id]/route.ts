@@ -15,12 +15,12 @@ export async function PUT(
 ): Promise<NextResponse> {
   const { id }: { id: string } = await params;
   const body = await request.json();
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   try {
     // セットの公開切替
     if (body.isPublic !== undefined) {
-      db.prepare('UPDATE task_sets SET is_public = ? WHERE id = ?').run(body.isPublic ? 1 : 0, id);
+      await db.run('UPDATE task_sets SET is_public = ? WHERE id = ?', body.isPublic ? 1 : 0, id);
       return NextResponse.json({ ok: true });
     }
 
@@ -39,28 +39,28 @@ export async function PUT(
       if (updates.parentId !== undefined) { fields.push('parent_id = ?'); values.push(updates.parentId || null); }
       if (fields.length > 0) {
         values.push(itemId);
-        db.prepare(`UPDATE task_set_items SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+        await db.run(`UPDATE task_set_items SET ${fields.join(', ')} WHERE id = ?`, ...values);
       }
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'deleteItem') {
-      db.prepare('DELETE FROM task_set_items WHERE id = ?').run(body.itemId);
+      await db.run('DELETE FROM task_set_items WHERE id = ?', body.itemId);
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'swapOrder') {
-      const item1 = db.prepare('SELECT sort_order FROM task_set_items WHERE id = ?').get(body.itemId1) as { sort_order: number } | undefined;
-      const item2 = db.prepare('SELECT sort_order FROM task_set_items WHERE id = ?').get(body.itemId2) as { sort_order: number } | undefined;
+      const item1 = await db.get<{ sort_order: number }>('SELECT sort_order FROM task_set_items WHERE id = ?', body.itemId1);
+      const item2 = await db.get<{ sort_order: number }>('SELECT sort_order FROM task_set_items WHERE id = ?', body.itemId2);
       if (item1 && item2) {
-        db.prepare('UPDATE task_set_items SET sort_order = ? WHERE id = ?').run(item2.sort_order, body.itemId1);
-        db.prepare('UPDATE task_set_items SET sort_order = ? WHERE id = ?').run(item1.sort_order, body.itemId2);
+        await db.run('UPDATE task_set_items SET sort_order = ? WHERE id = ?', item2.sort_order, body.itemId1);
+        await db.run('UPDATE task_set_items SET sort_order = ? WHERE id = ?', item1.sort_order, body.itemId2);
       }
       return NextResponse.json({ ok: true });
     }
 
     if (action === 'setParent') {
-      db.prepare('UPDATE task_set_items SET parent_id = ? WHERE id = ?').run(body.parentId || null, body.itemId);
+      await db.run('UPDATE task_set_items SET parent_id = ? WHERE id = ?', body.parentId || null, body.itemId);
       return NextResponse.json({ ok: true });
     }
 
@@ -79,8 +79,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id }: { id: string } = await params;
-  const db: import('better-sqlite3').Database = getDb();
-  db.prepare('DELETE FROM task_set_items WHERE set_id = ?').run(id);
-  db.prepare('DELETE FROM task_sets WHERE id = ?').run(id);
+  const db = await getDb();
+  await db.run('DELETE FROM task_set_items WHERE set_id = ?', id);
+  await db.run('DELETE FROM task_sets WHERE id = ?', id);
   return NextResponse.json({ ok: true });
 }

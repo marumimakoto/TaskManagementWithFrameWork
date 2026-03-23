@@ -23,7 +23,7 @@ interface ActivityEntry {
  *
  * from/to で期間フィルター可能
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   const from: string | null = request.nextUrl.searchParams.get('from');
   const to: string | null = request.nextUrl.searchParams.get('to');
@@ -32,7 +32,7 @@ export function GET(request: NextRequest): NextResponse {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   /** ヘルパー: タイムスタンプをYYYY-MM-DD文字列に変換 */
   function tsToDate(ts: number): string {
@@ -62,18 +62,18 @@ export function GET(request: NextRequest): NextResponse {
       JOIN todos t ON w.todo_id = t.id
       WHERE t.user_id = ?
     `;
-    const params: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId];
     if (from) {
       query += ' AND w.date >= ?';
-      params.push(from);
+      queryParams.push(from);
     }
     if (to) {
       query += ' AND w.date <= ?';
-      params.push(to);
+      queryParams.push(to);
     }
-    const rows = db.prepare(query).all(...params) as {
+    const rows = await db.all<{
       id: string; todo_id: string; title: string; content: string; date: string; created_at: number;
-    }[];
+    }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
         id: 'wl-' + row.id,
@@ -89,14 +89,14 @@ export function GET(request: NextRequest): NextResponse {
   // 2. 新規作成されたタスク
   {
     let query: string = 'SELECT id, title, created_at FROM todos WHERE user_id = ?';
-    const params: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND created_at BETWEEN ? AND ?';
-      params.push(range.start, range.end);
+      queryParams.push(range.start, range.end);
     }
-    const rows = db.prepare(query).all(...params) as {
+    const rows = await db.all<{
       id: string; title: string; created_at: number;
-    }[];
+    }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
         id: 'cr-' + row.id,
@@ -112,14 +112,14 @@ export function GET(request: NextRequest): NextResponse {
   // 3. 完了したタスク
   {
     let query: string = 'SELECT id, title, last_worked_at FROM todos WHERE user_id = ? AND done = 1 AND last_worked_at IS NOT NULL';
-    const params: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND last_worked_at BETWEEN ? AND ?';
-      params.push(range.start, range.end);
+      queryParams.push(range.start, range.end);
     }
-    const rows = db.prepare(query).all(...params) as {
+    const rows = await db.all<{
       id: string; title: string; last_worked_at: number;
-    }[];
+    }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
         id: 'cp-' + row.id,
@@ -135,14 +135,14 @@ export function GET(request: NextRequest): NextResponse {
   // 4. 削除されたタスク
   {
     let query: string = 'SELECT id, title, archived_at FROM archived_todos WHERE user_id = ?';
-    const params: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND archived_at BETWEEN ? AND ?';
-      params.push(range.start, range.end);
+      queryParams.push(range.start, range.end);
     }
-    const rows = db.prepare(query).all(...params) as {
+    const rows = await db.all<{
       id: string; title: string; archived_at: number;
-    }[];
+    }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
         id: 'dl-' + row.id,
@@ -186,12 +186,12 @@ export function GET(request: NextRequest): NextResponse {
   // 日別の作業時間合計（last_worked_atがその日のタスクのactual_min合計）
   {
     let query: string = 'SELECT last_worked_at, actual_min FROM todos WHERE user_id = ? AND last_worked_at IS NOT NULL AND actual_min > 0';
-    const params: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND last_worked_at BETWEEN ? AND ?';
-      params.push(range.start, range.end);
+      queryParams.push(range.start, range.end);
     }
-    const rows = db.prepare(query).all(...params) as { last_worked_at: number; actual_min: number }[];
+    const rows = await db.all<{ last_worked_at: number; actual_min: number }>(query, ...queryParams);
     for (const row of rows) {
       const d: string = tsToDate(row.last_worked_at);
       let stat = statsMap.get(d);
@@ -224,8 +224,8 @@ export function GET(request: NextRequest): NextResponse {
     ? 'SELECT id, title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0 AND archived_at BETWEEN ? AND ?'
     : 'SELECT id, title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0';
 
-  const activeTasks = db.prepare(paretoQuery).all(...paretoParams) as { id: string; title: string; actual_min: number }[];
-  const archivedTasks = db.prepare(paretoQueryArchived).all(...paretoParams) as { id: string; title: string; actual_min: number }[];
+  const activeTasks = await db.all<{ id: string; title: string; actual_min: number }>(paretoQuery, ...paretoParams);
+  const archivedTasks = await db.all<{ id: string; title: string; actual_min: number }>(paretoQueryArchived, ...paretoParams);
 
   // タイトルで集約（同名タスクの実績を合算）
   const paretoMap: Map<string, number> = new Map();

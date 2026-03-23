@@ -20,7 +20,7 @@ export async function PUT(
     return NextResponse.json({ error: 'updates is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   const fields: string[] = [];
   const values: unknown[] = [];
@@ -79,7 +79,7 @@ export async function PUT(
   }
 
   values.push(id);
-  db.prepare(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  await db.run(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, ...values);
 
   return NextResponse.json({ ok: true });
 }
@@ -96,29 +96,30 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id }: { id: string } = await params;
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   // 削除前にタスク情報を取得してアーカイブに保存
-  const row = db.prepare(
-    'SELECT id, user_id, title, est_min, actual_min, detail, deadline, done, created_at FROM todos WHERE id = ?'
-  ).get(id) as { id: string; user_id: string; title: string; est_min: number; actual_min: number; detail: string; deadline: number | null; done: number; created_at: number } | undefined;
+  const row = await db.get<{ id: string; user_id: string; title: string; est_min: number; actual_min: number; detail: string; deadline: number | null; done: number; created_at: number }>(
+    'SELECT id, user_id, title, est_min, actual_min, detail, deadline, done, created_at FROM todos WHERE id = ?', id
+  );
 
   if (row) {
-    db.prepare(
-      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.deadline, row.done, row.created_at, Date.now());
+    await db.run(
+      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.deadline, row.done, row.created_at, Date.now()
+    );
 
     // ユーザーごとに100件を超えたら古い順に削除
-    db.prepare(`
+    await db.run(`
       DELETE FROM archived_todos WHERE id IN (
         SELECT id FROM archived_todos WHERE user_id = ?
         ORDER BY archived_at DESC
         LIMIT -1 OFFSET 100
       )
-    `).run(row.user_id);
+    `, row.user_id);
   }
 
-  db.prepare('DELETE FROM todos WHERE id = ?').run(id);
+  await db.run('DELETE FROM todos WHERE id = ?', id);
 
   return NextResponse.json({ ok: true });
 }

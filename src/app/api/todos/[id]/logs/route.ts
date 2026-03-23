@@ -37,10 +37,10 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
   const { id }: { id: string } = await params;
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: WorkLogRow[] = db.prepare(
-    'SELECT * FROM work_logs WHERE todo_id = ? ORDER BY date DESC, created_at DESC'
-  ).all(id) as WorkLogRow[];
+  const db = await getDb();
+  const rows: WorkLogRow[] = await db.all<WorkLogRow>(
+    'SELECT * FROM work_logs WHERE todo_id = ? ORDER BY date DESC, created_at DESC', id
+  );
 
   const logs: WorkLog[] = rows.map(rowToWorkLog);
   return NextResponse.json(logs);
@@ -64,7 +64,7 @@ export async function POST(
     return NextResponse.json({ error: 'content is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const logId: string = crypto.randomUUID();
   const pad = (n: number): string => String(n).padStart(2, '0');
   let date: string;
@@ -76,9 +76,10 @@ export async function POST(
   }
   const createdAt: number = Date.now();
 
-  db.prepare(
-    'INSERT INTO work_logs (id, todo_id, content, date, created_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(logId, id, content.trim(), date, createdAt);
+  await db.run(
+    'INSERT INTO work_logs (id, todo_id, content, date, created_at) VALUES (?, ?, ?, ?, ?)',
+    logId, id, content.trim(), date, createdAt
+  );
 
   const log: WorkLog = {
     id: logId,

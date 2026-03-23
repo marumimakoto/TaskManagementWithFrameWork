@@ -16,10 +16,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'メールアドレスを入力してください' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const user: { id: string } | undefined = db.prepare(
-    'SELECT id FROM users WHERE email = ?'
-  ).get(email.trim()) as { id: string } | undefined;
+  const db = await getDb();
+  const user: { id: string } | undefined = await db.get<{ id: string }>(
+    'SELECT id FROM users WHERE email = ?', email.trim()
+  );
 
   // セキュリティ上、ユーザーが存在しない場合も同じレスポンスを返す
   if (!user) {
@@ -30,9 +30,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const id: string = crypto.randomUUID();
   const expiresAt: number = Date.now() + 60 * 60 * 1000; // 1時間後に有効期限切れ
 
-  db.prepare(
-    'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)'
-  ).run(id, user.id, token, expiresAt);
+  await db.run(
+    'INSERT INTO password_reset_tokens (id, user_id, token, expires_at) VALUES (?, ?, ?, ?)',
+    id, user.id, token, expiresAt
+  );
 
   // TODO: 本番ではメール送信サービスでリンクを送る
   const resetUrl: string = `${request.nextUrl.origin}/reset-password?token=${token}`;

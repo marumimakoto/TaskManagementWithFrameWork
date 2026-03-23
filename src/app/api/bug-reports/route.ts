@@ -19,7 +19,7 @@ interface BugReportRow {
  * userId指定: そのユーザーの報告のみ
  * role=admin: 全報告
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   const role: string | null = request.nextUrl.searchParams.get('role');
 
@@ -27,17 +27,17 @@ export function GET(request: NextRequest): NextResponse {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   let rows: BugReportRow[];
   if (role === 'admin') {
-    rows = db.prepare(
+    rows = await db.all<BugReportRow>(
       'SELECT * FROM bug_reports ORDER BY created_at DESC'
-    ).all() as BugReportRow[];
+    );
   } else {
-    rows = db.prepare(
-      'SELECT * FROM bug_reports WHERE user_id = ? ORDER BY created_at DESC'
-    ).all(userId) as BugReportRow[];
+    rows = await db.all<BugReportRow>(
+      'SELECT * FROM bug_reports WHERE user_id = ? ORDER BY created_at DESC', userId
+    );
   }
 
   const result = rows.map((row: BugReportRow) => ({
@@ -66,13 +66,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId, title, description are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const id: string = crypto.randomUUID();
   const now: number = Date.now();
 
-  db.prepare(
-    'INSERT INTO bug_reports (id, user_id, user_name, title, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, userId, userName ?? '', title.trim(), description.trim(), now, now);
+  await db.run(
+    'INSERT INTO bug_reports (id, user_id, user_name, title, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    id, userId, userName ?? '', title.trim(), description.trim(), now, now
+  );
 
   return NextResponse.json({ ok: true, id });
 }
@@ -88,7 +89,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const now: number = Date.now();
 
   const fields: string[] = ['updated_at = ?'];
@@ -104,7 +105,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
   }
 
   values.push(id);
-  db.prepare(`UPDATE bug_reports SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  await db.run(`UPDATE bug_reports SET ${fields.join(', ')} WHERE id = ?`, ...values);
 
   return NextResponse.json({ ok: true });
 }

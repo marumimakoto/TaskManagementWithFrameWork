@@ -36,16 +36,16 @@ function rowToDiary(row: DiaryRow): DiaryEntry {
  * @param request - クエリパラメータに userId を含むリクエスト
  * @returns 日記エントリのJSON配列
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: DiaryRow[] = db.prepare(
-    'SELECT * FROM diary_entries WHERE user_id = ? ORDER BY date DESC, created_at DESC'
-  ).all(userId) as DiaryRow[];
+  const db = await getDb();
+  const rows: DiaryRow[] = await db.all<DiaryRow>(
+    'SELECT * FROM diary_entries WHERE user_id = ? ORDER BY date DESC, created_at DESC', userId
+  );
 
   const entries: DiaryEntry[] = rows.map(rowToDiary);
   return NextResponse.json(entries);
@@ -65,20 +65,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const title: string = body.title?.trim() || '無題';
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const now: number = Date.now();
 
   // 同日のエントリが既にあるかチェック
-  const existing: DiaryRow | undefined = db.prepare(
-    'SELECT * FROM diary_entries WHERE user_id = ? AND date = ?'
-  ).get(userId, date) as DiaryRow | undefined;
+  const existing: DiaryRow | undefined = await db.get<DiaryRow>(
+    'SELECT * FROM diary_entries WHERE user_id = ? AND date = ?', userId, date
+  );
 
   if (existing) {
     // 既存エントリに追記
     const appendedContent: string = existing.content + '\n\n' + content.trim();
-    db.prepare(
-      'UPDATE diary_entries SET content = ?, updated_at = ? WHERE id = ?'
-    ).run(appendedContent, now, existing.id);
+    await db.run(
+      'UPDATE diary_entries SET content = ?, updated_at = ? WHERE id = ?',
+      appendedContent, now, existing.id
+    );
 
     const updated: DiaryEntry = {
       id: existing.id,
@@ -94,9 +95,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // 新規作成
   const id: string = crypto.randomUUID();
-  db.prepare(
-    'INSERT INTO diary_entries (id, user_id, title, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
-  ).run(id, userId, title, date, content.trim(), now, now);
+  await db.run(
+    'INSERT INTO diary_entries (id, user_id, title, date, content, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    id, userId, title, date, content.trim(), now, now
+  );
 
   const entry: DiaryEntry = {
     id,

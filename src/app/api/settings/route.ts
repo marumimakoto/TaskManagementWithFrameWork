@@ -31,16 +31,16 @@ function rowToSettings(row: SettingsRow): UserSettings {
 /**
  * ユーザーの表示設定を取得する。未登録ならデフォルト値を返す
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const row: SettingsRow | undefined = db.prepare(
-    'SELECT * FROM user_settings WHERE user_id = ?'
-  ).get(userId) as SettingsRow | undefined;
+  const db = await getDb();
+  const row: SettingsRow | undefined = await db.get<SettingsRow>(
+    'SELECT * FROM user_settings WHERE user_id = ?', userId
+  );
 
   if (!row) {
     return NextResponse.json(DEFAULT_SETTINGS);
@@ -60,8 +60,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId and settings are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  db.prepare(`
+  const db = await getDb();
+  await db.run(`
     INSERT INTO user_settings (user_id, dark_mode, font_size, font_family, butler_avatar, butler_prompt, butler_max_chars)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
@@ -71,7 +71,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       butler_avatar = excluded.butler_avatar,
       butler_prompt = excluded.butler_prompt,
       butler_max_chars = excluded.butler_max_chars
-  `).run(
+  `,
     userId,
     settings.darkMode ? 1 : 0,
     settings.fontSize,

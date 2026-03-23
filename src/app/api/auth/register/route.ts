@@ -20,12 +20,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'パスワードは6文字以上で入力してください' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
 
   // メールアドレスの重複チェック
-  const existing: { id: string } | undefined = db.prepare(
-    'SELECT id FROM users WHERE email = ?'
-  ).get(email) as { id: string } | undefined;
+  const existing: { id: string } | undefined = await db.get<{ id: string }>(
+    'SELECT id FROM users WHERE email = ?', email
+  );
 
   if (existing) {
     return NextResponse.json({ error: 'このメールアドレスは既に登録されています' }, { status: 409 });
@@ -34,9 +34,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const id: string = crypto.randomUUID();
   const passwordHash: string = await bcrypt.hash(password, 10);
 
-  db.prepare(
-    'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)'
-  ).run(id, name, email, passwordHash);
+  await db.run(
+    'INSERT INTO users (id, name, email, password_hash) VALUES (?, ?, ?, ?)',
+    id, name, email, passwordHash
+  );
 
   return NextResponse.json({
     user: {

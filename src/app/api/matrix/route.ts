@@ -14,16 +14,16 @@ interface MatrixRow {
 /**
  * ユーザーの保存済みマトリクス一覧を取得する
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: MatrixRow[] = db.prepare(
-    'SELECT * FROM matrix_positions WHERE user_id = ? ORDER BY updated_at DESC'
-  ).all(userId) as MatrixRow[];
+  const db = await getDb();
+  const rows: MatrixRow[] = await db.all<MatrixRow>(
+    'SELECT * FROM matrix_positions WHERE user_id = ? ORDER BY updated_at DESC', userId
+  );
 
   const result = rows.map((row: MatrixRow) => ({
     id: row.id,
@@ -52,23 +52,25 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId and data are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
+  const db = await getDb();
   const now: number = Date.now();
   const saveName: string = (name ?? '').trim() || '無題';
 
   if (body.id) {
     // 上書き保存
-    db.prepare(
-      'UPDATE matrix_positions SET name = ?, data = ?, updated_at = ? WHERE id = ? AND user_id = ?'
-    ).run(saveName, JSON.stringify(data), now, body.id, userId);
+    await db.run(
+      'UPDATE matrix_positions SET name = ?, data = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      saveName, JSON.stringify(data), now, body.id, userId
+    );
     return NextResponse.json({ ok: true, id: body.id });
   }
 
   // 新規保存
   const id: string = crypto.randomUUID();
-  db.prepare(
-    'INSERT INTO matrix_positions (id, user_id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, userId, saveName, JSON.stringify(data), now, now);
+  await db.run(
+    'INSERT INTO matrix_positions (id, user_id, name, data, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    id, userId, saveName, JSON.stringify(data), now, now
+  );
   return NextResponse.json({ ok: true, id });
 }
 
@@ -81,7 +83,7 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId and id are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  db.prepare('DELETE FROM matrix_positions WHERE id = ? AND user_id = ?').run(body.id, body.userId);
+  const db = await getDb();
+  await db.run('DELETE FROM matrix_positions WHERE id = ? AND user_id = ?', body.id, body.userId);
   return NextResponse.json({ ok: true });
 }

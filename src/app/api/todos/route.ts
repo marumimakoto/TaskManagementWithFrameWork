@@ -51,16 +51,16 @@ function rowToTodo(row: TodoRow): Todo {
  * @param request - クエリパラメータに userId を含むリクエスト
  * @returns タスク一覧のJSON配列
  */
-export function GET(request: NextRequest): NextResponse {
+export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
   if (!userId) {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const rows: TodoRow[] = db.prepare(
-    'SELECT * FROM todos WHERE user_id = ? ORDER BY sort_order ASC, created_at DESC'
-  ).all(userId) as TodoRow[];
+  const db = await getDb();
+  const rows: TodoRow[] = await db.all<TodoRow>(
+    'SELECT * FROM todos WHERE user_id = ? ORDER BY sort_order ASC, created_at DESC', userId
+  );
 
   const todos: Todo[] = rows.map(rowToTodo);
   return NextResponse.json(todos);
@@ -79,11 +79,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId and todo are required' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  db.prepare(`
+  const db = await getDb();
+  await db.run(`
     INSERT INTO todos (id, user_id, parent_id, title, est_min, actual_min, stuck_hours, last_worked_at, deadline, recurrence, detail, started, done, sort_order)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+  `,
     todo.id,
     userId,
     todo.parentId ?? null,

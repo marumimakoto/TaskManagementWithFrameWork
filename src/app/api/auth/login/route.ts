@@ -28,10 +28,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'メールアドレスとパスワードは必須です' }, { status: 400 });
   }
 
-  const db: import('better-sqlite3').Database = getDb();
-  const row: UserRow | undefined = db.prepare(
-    'SELECT * FROM users WHERE email = ?'
-  ).get(email) as UserRow | undefined;
+  const db = await getDb();
+  const row: UserRow | undefined = await db.get<UserRow>(
+    'SELECT * FROM users WHERE email = ?', email
+  );
 
   if (!row) {
     return NextResponse.json({ error: 'メールアドレスまたはパスワードが違います' }, { status: 401 });
