@@ -137,20 +137,24 @@ export default function Page(): React.ReactElement {
   /** メールアドレスとパスワードでAPIにログインリクエストを送る */
   async function handleLogin(): Promise<void> {
     setAuthError('');
-    const res: Response = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-    });
-    const data: { user?: AppUser; error?: string } = await res.json();
-    if (!res.ok || !data.user) {
-      setAuthError(data.error ?? 'ログインに失敗しました');
-      return;
+    try {
+      const res: Response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
+      });
+      const data: { user?: AppUser; error?: string } = await res.json();
+      if (!res.ok || !data.user) {
+        setAuthError(data.error ?? 'ログインに失敗しました');
+        return;
+      }
+      saveSession(data.user);
+      setUser(data.user);
+      triggerWelcome();
+      log('login', { userId: data.user.id });
+    } catch {
+      setAuthError('サーバーに接続できませんでした');
     }
-    saveSession(data.user);
-    setUser(data.user);
-    triggerWelcome();
-    log('login', { userId: data.user.id });
   }
 
   /** Welcome画面を表示してタイマーで自動フェードアウトする */
@@ -171,20 +175,24 @@ export default function Page(): React.ReactElement {
   /** 名前・メールアドレス・パスワードでAPIに登録リクエストを送る */
   async function handleRegister(): Promise<void> {
     setAuthError('');
-    const res: Response = await fetch('/api/auth/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: registerName, email: registerEmail, password: registerPassword }),
-    });
-    const data: { user?: AppUser; error?: string } = await res.json();
-    if (!res.ok || !data.user) {
-      setAuthError(data.error ?? '登録に失敗しました');
-      return;
+    try {
+      const res: Response = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: registerName, email: registerEmail, password: registerPassword }),
+      });
+      const data: { user?: AppUser; error?: string } = await res.json();
+      if (!res.ok || !data.user) {
+        setAuthError(data.error ?? '登録に失敗しました');
+        return;
+      }
+      saveSession(data.user);
+      setUser(data.user);
+      triggerWelcome();
+      log('register', { userId: data.user.id });
+    } catch {
+      setAuthError('サーバーに接続できませんでした');
     }
-    saveSession(data.user);
-    setUser(data.user);
-    triggerWelcome();
-    log('register', { userId: data.user.id });
   }
 
   /** セッションを削除してログアウトする */

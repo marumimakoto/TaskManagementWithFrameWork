@@ -34,12 +34,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   );
 
   if (!row) {
-    return NextResponse.json({ error: 'メールアドレスまたはパスワードが違います' }, { status: 401 });
+    return NextResponse.json({ error: 'このメールアドレスは登録されていません' }, { status: 401 });
   }
 
   const isValid: boolean = await bcrypt.compare(password, row.password_hash);
   if (!isValid) {
-    return NextResponse.json({ error: 'メールアドレスまたはパスワードが違います' }, { status: 401 });
+    return NextResponse.json({ error: 'パスワードが違います' }, { status: 401 });
   }
 
   return NextResponse.json({
