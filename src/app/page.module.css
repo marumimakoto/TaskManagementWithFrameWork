@@ -1332,17 +1332,14 @@
 /* ===== Butler Avatar ===== */
 
 .butlerContainer {
-  position: fixed;
-  width: 33vw;
-  max-width: 400px;
-  min-width: 240px;
-  z-index: 8000;
+  position: relative;
+  width: 100%;
+  max-width: 600px;
+  margin: 24px auto;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  bottom: 24px;
-  right: 24px;
 }
 
 .butlerBubble {
@@ -2725,9 +2722,10 @@
 
   /* 執事 */
   .butlerContainer {
-    width: 85vw;
-    max-width: 340px;
-    min-width: 200px;
+    width: 100%;
+    max-width: 100%;
+    min-width: auto;
+    margin: 16px auto;
   }
 
   .butlerToggle {
@@ -2802,8 +2800,8 @@
   }
 
   .butlerContainer {
-    width: 90vw;
-    min-width: 180px;
+    width: 100%;
+    min-width: auto;
   }
 
   .welcomeContent {
@@ -3057,13 +3055,10 @@
   }
 
   .butlerContainer {
-    bottom: 72px !important;
-    right: auto !important;
-    left: 12px !important;
-    width: 60vw;
-    min-width: 180px;
-    max-width: 260px;
-    align-items: flex-start;
+    width: 100%;
+    min-width: auto;
+    max-width: 100%;
+    align-items: flex-end;
   }
 
   .butlerHideBtn {
