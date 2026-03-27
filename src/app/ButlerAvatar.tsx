@@ -141,7 +141,10 @@ export default function ButlerAvatar({
 
   if (!visible) {
     return (
-      <div style={{ position: 'fixed', right: position.x, bottom: position.y, zIndex: 8000 }}>
+      <div
+        className={styles.butlerContainer}
+        style={{ right: position.x, bottom: position.y }}
+      >
         <button
           className={styles.butlerToggle}
           onClick={() => { setVisible(true); fetchMessage(); }}

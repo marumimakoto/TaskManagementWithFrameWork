@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import crypto from 'crypto';
 import type { Recurrence, Todo } from '@/app/types';
 
 /** SQLiteのtodosテーブルから取得した生の行データ */
@@ -99,6 +100,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     todo.done ? 1 : 0,
     todo.sortOrder ?? 0,
   );
+
+  // 繰り返し設定がある場合はrecurring_rulesに登録（既に同タイトル・同ルールがなければ）
+  if (todo.recurrence && todo.recurrence !== 'carry') {
+    const existing = await db.get<{ id: string }>(
+      'SELECT id FROM recurring_rules WHERE user_id = ? AND title = ? AND recurrence = ? AND enabled = 1',
+      userId, todo.title, todo.recurrence
+    );
+    if (!existing) {
+      const ruleId: string = crypto.randomUUID();
+      await db.run(
+        'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
+        ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence
+      );
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
+import crypto from 'crypto';
 
 /**
  * 指定IDのタスクを部分更新する
@@ -80,6 +81,28 @@ export async function PUT(
 
   values.push(id);
   await db.run(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, ...values);
+
+  // 繰り返し設定が変更された場合、recurring_rulesを更新
+  if (updates.recurrence !== undefined) {
+    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string }>(
+      'SELECT user_id, title, est_min, detail FROM todos WHERE id = ?', id
+    );
+    if (todo) {
+      // 既存ルール（同タイトル）を無効化
+      await db.run(
+        'UPDATE recurring_rules SET enabled = 0 WHERE user_id = ? AND title = ?',
+        todo.user_id, todo.title
+      );
+      // 新しいルールがcarry以外なら登録
+      if (updates.recurrence !== 'carry') {
+        const ruleId: string = crypto.randomUUID();
+        await db.run(
+          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
+          ruleId, todo.user_id, todo.title, todo.est_min, todo.detail, updates.recurrence
+        );
+      }
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

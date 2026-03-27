@@ -167,9 +167,18 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     )
   `, userId);
 
-  // 2. 繰り返しタスクの自動追加
-  const recurringTodos: TodoRow[] = await db.all<TodoRow>(
-    "SELECT * FROM todos WHERE user_id = ? AND recurrence != 'carry' AND recurrence != ''", userId
+  // 2. 繰り返しルールに基づく自動追加（タスクを削除してもルールが生きていれば生成する）
+  interface RuleRow {
+    id: string;
+    user_id: string;
+    title: string;
+    est_min: number;
+    detail: string;
+    recurrence: string;
+  }
+
+  const rules: RuleRow[] = await db.all<RuleRow>(
+    'SELECT * FROM recurring_rules WHERE user_id = ? AND enabled = 1', userId
   );
 
   // 既存の未完了タスクのタイトルセット
@@ -180,20 +189,20 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
 
   let addedCount: number = 0;
 
-  for (const t of recurringTodos) {
-    if (!shouldAddToday(t.recurrence)) {
+  for (const rule of rules) {
+    if (!shouldAddToday(rule.recurrence)) {
       continue;
     }
     // 同名タスクが未完了で存在する場合はスキップ
-    if (existingTitles.has(t.title)) {
+    if (existingTitles.has(rule.title)) {
       continue;
     }
     const newId: string = crypto.randomUUID();
     await db.run(
       'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      newId, userId, t.title, t.est_min, t.recurrence, t.detail, now
+      newId, userId, rule.title, rule.est_min, rule.recurrence, rule.detail, now
     );
-    existingTitles.add(t.title);
+    existingTitles.add(rule.title);
     addedCount++;
   }
 

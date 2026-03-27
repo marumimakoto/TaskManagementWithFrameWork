@@ -219,6 +219,22 @@ async function initializeTables(c: Client): Promise<void> {
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
       updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,
+    `CREATE TABLE IF NOT EXISTS user_purchases (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL UNIQUE,
+      stripe_session_id TEXT,
+      purchased_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    )`,
+    `CREATE TABLE IF NOT EXISTS recurring_rules (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      title TEXT NOT NULL,
+      est_min INTEGER NOT NULL DEFAULT 30,
+      detail TEXT NOT NULL DEFAULT '',
+      recurrence TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    )`,
   ];
 
   for (const sql of tables) {

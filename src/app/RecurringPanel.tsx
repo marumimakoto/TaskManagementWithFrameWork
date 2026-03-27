@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
 import styles from './page.module.css';
+import RecurrenceSelector from './RecurrenceSelector';
 
 /** 繰り返しタスクの型 */
 interface RecurringTodo {
@@ -87,12 +88,13 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   }
 
   /** 繰り返し設定を更新する */
-  async function saveRecurrence(id: string): Promise<void> {
+  async function saveRecurrence(id: string, recurrenceValue?: string): Promise<void> {
+    const rec: string = recurrenceValue ?? editRecurrence;
     try {
       await fetch('/api/todos/' + id, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: { recurrence: editRecurrence } }),
+        body: JSON.stringify({ updates: { recurrence: rec } }),
       });
       setEditingId(null);
       await fetchItems();
@@ -144,8 +146,8 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                   {t.done ? '完了' : '未完了'}
                 </span>
                 <span className={styles.archiveTitle}>{t.title}</span>
-                <span className={styles.archiveDeadline}>
-                  {recurrenceLabel(t.recurrence)}
+                <span style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent, #2563eb)' }}>
+                  🔁 {recurrenceLabel(t.recurrence)}
                 </span>
               </div>
 
@@ -156,29 +158,23 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
               )}
 
               {editingId === t.id ? (
-                <div style={{ marginTop: 8, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <select
+                <div style={{ marginTop: 8 }}>
+                  <RecurrenceSelector
                     value={editRecurrence}
-                    onChange={(e) => setEditRecurrence(e.target.value)}
-                    className={styles.input}
-                    style={{ maxWidth: 200 }}
-                  >
-                    <option value="daily">毎日</option>
-                    <option value="weekly">毎週</option>
-                    <option value="monthly">毎月</option>
-                    <option value="yearly">毎年</option>
-                  </select>
+                    onChange={(v) => {
+                      setEditRecurrence(v);
+                      // プリセット選択時は即保存
+                      if (!v.startsWith('custom')) {
+                        saveRecurrence(t.id, v);
+                      }
+                    }}
+                    onSave={() => saveRecurrence(t.id)}
+                    showSaveButton={true}
+                  />
                   <button
                     type="button"
                     className={styles.primaryBtn}
-                    style={{ fontSize: '12px', padding: '4px 12px' }}
-                    onClick={() => saveRecurrence(t.id)}
-                  >
-                    保存
-                  </button>
-                  <button
-                    type="button"
-                    className={styles.iconBtn}
+                    style={{ fontSize: '14px', padding: '6px 14px', marginTop: 8 }}
                     onClick={() => setEditingId(null)}
                   >
                     キャンセル

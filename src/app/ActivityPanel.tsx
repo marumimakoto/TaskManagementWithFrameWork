@@ -44,7 +44,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
  * 作業記録一覧パネル
  * 一覧モードと統計モードを切り替えて表示できる
  */
-export default function ActivityPanel({ user }: { user: AppUser }): React.ReactElement {
+export default function ActivityPanel({ user, isPro, onShowProModal }: { user: AppUser; isPro?: boolean; onShowProModal?: () => void }): React.ReactElement {
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [paretoData, setParetoData] = useState<ParetoItem[]>([]);
@@ -343,10 +343,18 @@ export default function ActivityPanel({ user }: { user: AppUser }): React.ReactE
             <button
               type="button"
               className={`${styles.viewModeBtn} ${viewMode === 'pareto' ? styles.viewModeBtnActive : ''}`}
-              onClick={() => setViewMode('pareto')}
+              onClick={() => {
+                if (!isPro) {
+                  if (onShowProModal) {
+                    onShowProModal();
+                  }
+                  return;
+                }
+                setViewMode('pareto');
+              }}
               title="パレート分析"
             >
-              📐
+              📐 {!isPro && '🔒'}
             </button>
           </div>
         </div>

@@ -32,6 +32,7 @@ import { DragHandle, MoveButtonBar, DeleteButton } from './SharedComponents';
 import HelpPanel, { TUTORIAL_STEPS } from './HelpPanel';
 import BugReportPanel from './BugReportPanel';
 import AdminPanel from './AdminPanel';
+import { useIsMobile } from './useIsMobile';
 
 /**
  * ページのルートコンポーネント
@@ -316,7 +317,18 @@ export default function Page(): React.ReactElement {
  * @param user - ログイン中のユーザー情報
  * @param onLogout - ログアウト時のコールバック
  */
+/** 曜日のキーと日本語名のマッピング */
+const DAY_KEYS: string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+const DAY_NAMES: string[] = ['日', '月', '火', '水', '木', '金', '土'];
+
 function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: () => void; onUserUpdate: (updated: AppUser) => void }): React.ReactElement {
+  const isMobile: boolean = useIsMobile();
+  const [showMobileAddForm, setShowMobileAddForm] = useState<boolean>(false);
+
+  /** 今日の曜日に基づいた繰り返し選択肢 */
+  const todayDayIndex: number = new Date().getDay();
+  const todayDayKey: string = DAY_KEYS[todayDayIndex];
+  const todayDayName: string = DAY_NAMES[todayDayIndex];
   const [activeTab, setActiveTab] = useState<'tasks' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
@@ -325,6 +337,88 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [tutorialTarget, setTutorialTarget] = useState<string | null>(null);
   const [tutorialPos, setTutorialPos] = useState<{ top: number; left: number } | null>(null);
   const [tutorialStepIndex, setTutorialStepIndex] = useState<number | null>(null);
+
+  // プロ版の状態管理
+  const [isPro, setIsPro] = useState<boolean>(false);
+  const [showProModal, setShowProModal] = useState<boolean>(false);
+  const [proPurchasing, setProPurchasing] = useState<boolean>(false);
+
+  /** プロ版の状態を取得 */
+  useEffect(() => {
+    async function checkPro(): Promise<void> {
+      try {
+        const res: Response = await fetch('/api/purchase?userId=' + user.id);
+        const data = await res.json();
+        setIsPro(data.isPro === true);
+      } catch {
+        setIsPro(false);
+      }
+    }
+    checkPro();
+  }, [user.id]);
+
+  /** 決済成功後のコールバック処理 */
+  useEffect(() => {
+    const params: URLSearchParams = new URLSearchParams(window.location.search);
+    const purchaseStatus: string | null = params.get('purchase');
+    const sessionId: string | null = params.get('session_id');
+    if (purchaseStatus === 'success' && sessionId) {
+      // Stripeの決済完了を確認してDBに記録
+      fetch('/api/purchase/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, userId: user.id }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.isPro) {
+            setIsPro(true);
+          }
+        })
+        .catch(() => {});
+      // URLからクエリパラメータを除去
+      window.history.replaceState({}, '', '/');
+    }
+  }, [user.id]);
+
+  /** プロ機能のタブ一覧 */
+  const PRO_TABS: Set<string> = new Set(['matrix', 'diary-public']);
+
+  /**
+   * タブを切り替える。プロ機能の場合は購入チェック
+   */
+  function switchTab(tab: typeof activeTab): void {
+    if (PRO_TABS.has(tab) && !isPro) {
+      setShowProModal(true);
+      return;
+    }
+    setActiveTab(tab);
+    setMenuOpen(false);
+  }
+
+  /**
+   * プロ版購入フローを開始する
+   */
+  async function startPurchase(): Promise<void> {
+    setProPurchasing(true);
+    try {
+      const res: Response = await fetch('/api/purchase', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || '購入処理に失敗しました');
+      }
+    } catch {
+      alert('購入処理に失敗しました');
+    } finally {
+      setProPurchasing(false);
+    }
+  }
 
   /**
    * チュートリアルのアクションが発生したときに呼ぶ
@@ -398,11 +492,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       log('fetch:status', { status: res.status });
       const data: Todo[] = await res.json();
       log('fetch:data', { count: data.length, sample: data.slice(0, 2).map((t) => t.title) });
-      // sortOrderが全て0の場合はインデックスで初期化
-      const allZero: boolean = data.every((t) => t.sortOrder === 0);
-      if (allZero && data.length > 0) {
-        const initialized: Todo[] = data.map((t, i) => ({ ...t, sortOrder: i }));
+      // sortOrderに重複がある場合は連番で振り直してDBにも反映
+      const orders: number[] = data.map((t) => t.sortOrder);
+      const hasDuplicates: boolean = new Set(orders).size < orders.length;
+      if (hasDuplicates && data.length > 0) {
+        const initialized: Todo[] = data.map((t, i) => ({ ...t, sortOrder: i * 10 }));
         setTodos(initialized);
+        // DBにも反映（バックグラウンド）
+        for (const t of initialized) {
+          fetch('/api/todos/' + t.id, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ updates: { sortOrder: t.sortOrder } }),
+          });
+        }
       } else {
         setTodos(data);
       }
@@ -485,6 +588,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [customMonthDay, setCustomMonthDay] = useState<string>('1');
   const [customMonthNth, setCustomMonthNth] = useState<string>('1');
   const [customMonthNthDay, setCustomMonthNthDay] = useState<string>('mon');
+  /** 直前のカスタム繰り返し設定文字列（プリセットに切り替えた後に戻すため） */
+  const lastCustomRecurrenceRef = useRef<string>('');
   const [deadlineText, setDeadlineText] = useState('');
 
   // 表示モード
@@ -510,7 +615,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   // Inline edit（フィールド単位で編集）
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingField, setEditingField] = useState<'title' | 'detail' | 'est' | 'actual' | 'deadline' | null>(null);
+  const [editingField, setEditingField] = useState<'title' | 'detail' | 'est' | 'actual' | 'deadline' | 'recurrence' | null>(null);
   const [editValue, setEditValue] = useState('');
 
   // ドラッグ&ドロップ
@@ -682,16 +787,49 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         return;
       }
     }
+    // 元の親を保存（Undo用）
+    const oldTodo: Todo | undefined = todos.find((t) => t.id === childId);
+    const oldParentId: string | null = oldTodo?.parentId ?? null;
+
     setTodos((prev) =>
       prev.map((t) => (t.id === childId ? { ...t, parentId: newParentId ?? undefined } : t)),
     );
     log('changeParent', { childId, newParentId });
 
-    await fetch('/api/todos/' + childId, {
+    const res: Response = await fetch('/api/todos/' + childId, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates: { parentId: newParentId } }),
     });
+
+    if (!res.ok) {
+      // API失敗時はロールバック
+      setTodos((prev) =>
+        prev.map((t) => (t.id === childId ? { ...t, parentId: oldParentId ?? undefined } : t)),
+      );
+      return;
+    }
+
+    // Undoトースト（3秒で自動消滅）
+    const taskName: string = oldTodo?.title ?? '';
+    const toastId: string = 'move-' + Date.now();
+    const undoAction = async (): Promise<void> => {
+      setTodos((prev) =>
+        prev.map((t) => (t.id === childId ? { ...t, parentId: oldParentId ?? undefined } : t)),
+      );
+      await fetch('/api/todos/' + childId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: { parentId: oldParentId } }),
+      });
+    };
+    setUndoToasts((prev) => [
+      ...prev,
+      { toastId, todoId: childId, message: `「${taskName}」の階層を変更しました`, undo: undoAction },
+    ]);
+    setTimeout(() => {
+      setUndoToasts((prev) => prev.filter((t) => t.toastId !== toastId));
+    }, 3000);
   }
 
   /**
@@ -774,6 +912,25 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     }
 
     const det: string | undefined = detailText.trim() || undefined;
+
+    // カスタム繰り返しの場合、詳細を文字列にエンコードする
+    let finalRecurrence: string = mode;
+    if (mode === 'custom') {
+      if (customUnit === 'day') {
+        finalRecurrence = `custom:${customInterval}:day`;
+      } else if (customUnit === 'week') {
+        finalRecurrence = `custom:${customInterval}:week:${customWeekDays.join(',')}`;
+      } else if (customUnit === 'month') {
+        if (customMonthMode === 'date') {
+          finalRecurrence = `custom:${customInterval}:month:date:${customMonthDay}`;
+        } else {
+          finalRecurrence = `custom:${customInterval}:month:nth:${customMonthNth}:${customMonthNthDay}`;
+        }
+      } else if (customUnit === 'year') {
+        finalRecurrence = `custom:${customInterval}:year`;
+      }
+    }
+
     // 新しいタスクは最小sortOrder - 1 で先頭に追加
     const minOrder: number = todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) : 0;
     const todo: Todo = {
@@ -785,7 +942,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       stuckHours: 0,
       lastWorkedAt: undefined,
       deadline: d,
-      recurrence: mode,
+      recurrence: finalRecurrence,
       started: false,
       done: false,
       sortOrder: minOrder - 1,
@@ -1045,9 +1202,30 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     log('removeAllTodos', { count: allTodos.length });
   }
 
+  /** sortOrderの更新をAPIに送信し、失敗時はロールバック */
+  function persistSortOrders(updates: { id: string; sortOrder: number }[], rollback: Todo[]): void {
+    Promise.all(
+      updates.map((u) =>
+        fetch('/api/todos/' + u.id, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates: { sortOrder: u.sortOrder } }),
+        })
+      )
+    ).then((results) => {
+      const failed: boolean = results.some((r) => !r.ok);
+      if (failed) {
+        setTodos(rollback);
+        log('sortOrder:rollback', { reason: 'API failed' });
+      }
+    }).catch(() => {
+      setTodos(rollback);
+      log('sortOrder:rollback', { reason: 'network error' });
+    });
+  }
+
   /**
    * タスクを1つ上に移動する（同じ階層内で前のタスクと入れ替え）
-   * stateを即座に更新し、APIは非同期で投げる（連打対応）
    */
   function moveUp(todoId: string): void {
     setTodos((prev) => {
@@ -1056,27 +1234,37 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       if (!current) {
         return prev;
       }
-      // 同じ親のタスクだけを抽出
       const siblings: Todo[] = list.filter((t) => (t.parentId ?? null) === (current.parentId ?? null));
       const sibIdx: number = siblings.findIndex((t) => t.id === todoId);
       if (sibIdx <= 0) {
         return prev;
       }
       const target: Todo = siblings[sibIdx - 1];
-      const tempOrder: number = current.sortOrder;
-      const newOrder: number = target.sortOrder;
-      // API呼び出し（非同期、awaitしない）
-      fetch('/api/todos/' + current.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: newOrder } }) });
-      fetch('/api/todos/' + target.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: tempOrder } }) });
-      return prev.map((todo) => {
-        if (todo.id === current.id) {
+      let currentOrder: number = current.sortOrder;
+      let targetOrder: number = target.sortOrder;
+      if (currentOrder === targetOrder) {
+        targetOrder = currentOrder - 1;
+      }
+      const diffCurrent: number = targetOrder - currentOrder;
+      const diffTarget: number = currentOrder - targetOrder;
+      const currentDescendants: Set<string> = new Set(getDescendantIds(current.id, prev));
+      const targetDescendants: Set<string> = new Set(getDescendantIds(target.id, prev));
+      const updates: { id: string; sortOrder: number }[] = [];
+      const result: Todo[] = prev.map((todo) => {
+        if (todo.id === current.id || currentDescendants.has(todo.id)) {
+          const newOrder: number = todo.sortOrder + diffCurrent;
+          updates.push({ id: todo.id, sortOrder: newOrder });
           return { ...todo, sortOrder: newOrder };
         }
-        if (todo.id === target.id) {
-          return { ...todo, sortOrder: tempOrder };
+        if (todo.id === target.id || targetDescendants.has(todo.id)) {
+          const newOrder: number = todo.sortOrder + diffTarget;
+          updates.push({ id: todo.id, sortOrder: newOrder });
+          return { ...todo, sortOrder: newOrder };
         }
         return todo;
       });
+      persistSortOrders(updates, prev);
+      return result;
     });
   }
 
@@ -1096,38 +1284,69 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         return prev;
       }
       const target: Todo = siblings[sibIdx + 1];
-      const tempOrder: number = current.sortOrder;
-      const newOrder: number = target.sortOrder;
-      fetch('/api/todos/' + current.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: newOrder } }) });
-      fetch('/api/todos/' + target.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { sortOrder: tempOrder } }) });
-      return prev.map((todo) => {
-        if (todo.id === current.id) {
+      let currentOrder: number = current.sortOrder;
+      let targetOrder: number = target.sortOrder;
+      if (currentOrder === targetOrder) {
+        targetOrder = currentOrder + 1;
+      }
+      const diffCurrent: number = targetOrder - currentOrder;
+      const diffTarget: number = currentOrder - targetOrder;
+      const currentDescendants: Set<string> = new Set(getDescendantIds(current.id, prev));
+      const targetDescendants: Set<string> = new Set(getDescendantIds(target.id, prev));
+      const updates: { id: string; sortOrder: number }[] = [];
+      const result: Todo[] = prev.map((todo) => {
+        if (todo.id === current.id || currentDescendants.has(todo.id)) {
+          const newOrder: number = todo.sortOrder + diffCurrent;
+          updates.push({ id: todo.id, sortOrder: newOrder });
           return { ...todo, sortOrder: newOrder };
         }
-        if (todo.id === target.id) {
-          return { ...todo, sortOrder: tempOrder };
+        if (todo.id === target.id || targetDescendants.has(todo.id)) {
+          const newOrder: number = todo.sortOrder + diffTarget;
+          updates.push({ id: todo.id, sortOrder: newOrder });
+          return { ...todo, sortOrder: newOrder };
         }
         return todo;
       });
+      persistSortOrders(updates, prev);
+      return result;
     });
   }
 
+  /** タスクの階層の深さを計算する */
+  function getDepth(todoId: string): number {
+    let depth: number = 0;
+    let current: Todo | undefined = todos.find((t) => t.id === todoId);
+    while (current?.parentId) {
+      depth++;
+      current = todos.find((t) => t.id === current!.parentId);
+    }
+    return depth;
+  }
+
+  /** 階層の深さ制限 */
+  const MAX_DEPTH: number = 5;
+
   /**
-   * タスクを右に移動する（直前の同階層タスクの子にする）
+   * タスクを右に移動する（表示順で直前のタスクの子にする）
+   * 最大5段まで
    */
   function moveRight(todoId: string): void {
-    const list: Todo[] = [...todos].sort((a, b) => a.sortOrder - b.sortOrder);
-    const current: Todo | undefined = list.find((t) => t.id === todoId);
-    if (!current) {
+    // 深さ制限チェック
+    if (getDepth(todoId) >= MAX_DEPTH - 1) {
       return;
     }
-    const siblings: Todo[] = list.filter((t) => (t.parentId ?? null) === (current.parentId ?? null));
-    const sibIdx: number = siblings.findIndex((t) => t.id === todoId);
-    if (sibIdx <= 0) {
+    // treeList（表示順）で1つ上のタスクを探す
+    const idx: number = treeList.findIndex((item) => item.todo.id === todoId);
+    if (idx <= 0) {
       return;
     }
-    const target: Todo = siblings[sibIdx - 1];
-    changeParent(todoId, target.id);
+    const prevTodo: Todo = treeList[idx - 1].todo;
+    // 自分の子孫を親にはできない
+    const descendants: string[] = getDescendantIds(todoId, todos);
+    if (descendants.includes(prevTodo.id)) {
+      return;
+    }
+    changeParent(todoId, prevTodo.id);
   }
 
   /**
@@ -1161,13 +1380,248 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&dates=${dates}`;
   }
 
+  /** カスタム繰り返し文字列をパースしてstateに復元する */
+  function restoreCustomRecurrence(rec: string): void {
+    const parts: string[] = rec.split(':');
+    setCustomInterval(parts[1] || '1');
+    setCustomUnit(parts[2] || 'week');
+    if (parts[2] === 'week' && parts[3]) {
+      setCustomWeekDays(parts[3].split(','));
+    }
+    if (parts[2] === 'month') {
+      if (parts[3] === 'date') {
+        setCustomMonthMode('date');
+        setCustomMonthDay(parts[4] || '1');
+      } else if (parts[3] === 'nth') {
+        setCustomMonthMode('weekday');
+        setCustomMonthNth(parts[4] || '1');
+        setCustomMonthNthDay(parts[5] || 'mon');
+      }
+    }
+  }
+
   /**
    * タスク展開時の共通UIを描画する
    * detail/compact両モードから呼び出される
    */
+  /** 繰り返し設定を日本語表示に変換する */
+  function recurrenceLabel(rec: string): string {
+    if (!rec || rec === 'carry') {
+      return '繰り返しなし';
+    }
+    if (rec === 'day') {
+      return '毎日';
+    }
+    if (rec === 'week:weekday') {
+      return '毎週平日（月〜金）';
+    }
+    if (rec.startsWith('week:')) {
+      const dayKey: string = rec.replace('week:', '');
+      const idx: number = DAY_KEYS.indexOf(dayKey);
+      if (idx >= 0) {
+        return `毎週${DAY_NAMES[idx]}曜日`;
+      }
+      return `毎週（${dayKey}）`;
+    }
+    if (rec === 'month:same-date') {
+      return '毎月同じ日';
+    }
+    if (rec === 'year') {
+      return '毎年同じ日';
+    }
+    if (rec.startsWith('custom:')) {
+      // custom:N:unit:details の形式を解読
+      const parts: string[] = rec.split(':');
+      const interval: string = parts[1] || '1';
+      const unit: string = parts[2] || '';
+      const unitLabel: Record<string, string> = { day: '日', week: '週', month: '月', year: '年' };
+      const unitName: string = unitLabel[unit] || unit;
+      let detail: string = `${interval}${unitName}ごと`;
+
+      if (unit === 'week' && parts[3]) {
+        const days: string[] = parts[3].split(',');
+        const dayLabels: string = days.map((d) => {
+          const idx: number = DAY_KEYS.indexOf(d);
+          return idx >= 0 ? DAY_NAMES[idx] : d;
+        }).join('・');
+        detail += `（${dayLabels}曜日）`;
+      } else if (unit === 'month') {
+        if (parts[3] === 'date' && parts[4]) {
+          detail += `（毎月${parts[4]}日）`;
+        } else if (parts[3] === 'nth' && parts[4] && parts[5]) {
+          const nthDay: number = DAY_KEYS.indexOf(parts[5]);
+          const nthDayName: string = nthDay >= 0 ? DAY_NAMES[nthDay] : parts[5];
+          detail += `（第${parts[4]}${nthDayName}曜日）`;
+        }
+      }
+
+      return detail;
+    }
+    return rec;
+  }
+
   function renderExpandedContent(t: Todo): React.ReactElement {
     return (
       <div className={styles.workLogArea} onClick={(e) => e.stopPropagation()}>
+        {/* 繰り返し設定（常にプルダウン表示） */}
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: '13px' }}>
+          <span>🔁</span>
+          <select
+            value={t.recurrence.startsWith('custom:') ? 'custom' : t.recurrence}
+            onChange={(e) => {
+              const v: string = e.target.value;
+              if (v === 'custom') {
+                setEditingId(t.id);
+                setEditingField('recurrence');
+                setEditValue('custom');
+                // 直前のカスタム設定 → 現在のタスクのカスタム → デフォルトの順で復元
+                if (lastCustomRecurrenceRef.current) {
+                  restoreCustomRecurrence(lastCustomRecurrenceRef.current);
+                } else if (t.recurrence.startsWith('custom:')) {
+                  restoreCustomRecurrence(t.recurrence);
+                } else {
+                  setCustomUnit('week');
+                  setCustomInterval('1');
+                  setCustomWeekDays(['mon']);
+                }
+              } else {
+                // プリセット：即保存
+                setTodos((prev) => prev.map((todo) => (todo.id === t.id ? { ...todo, recurrence: v } : todo)));
+                fetch('/api/todos/' + t.id, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ updates: { recurrence: v } }),
+                });
+                // カスタム編集中だったら閉じる
+                if (editingId === t.id && editingField === 'recurrence') {
+                  setEditingId(null);
+                  setEditingField(null);
+                }
+              }
+            }}
+            onClick={() => {
+              // 既にカスタムが設定されている場合、クリックでカスタムUIを開く
+              if (t.recurrence.startsWith('custom:') && editingField !== 'recurrence') {
+                setEditingId(t.id);
+                setEditingField('recurrence');
+                setEditValue(t.recurrence);
+                restoreCustomRecurrence(t.recurrence);
+              }
+            }}
+            className={styles.input}
+            style={{ fontSize: '13px', width: 'auto', minWidth: '140px', padding: '4px 8px' }}
+          >
+            <option value="carry">繰り返さない</option>
+            <option value="day">毎日</option>
+            <option value="week:weekday">毎週平日（月〜金）</option>
+            <option value={`week:${todayDayKey}`}>毎週{todayDayName}曜日</option>
+            <option value="month:same-date">毎月同じ日</option>
+            <option value="year">毎年同じ日</option>
+            <option value="custom">カスタム...</option>
+          </select>
+          {t.recurrence.startsWith('custom:') && editingField !== 'recurrence' && (
+            <span style={{ color: 'var(--text-secondary, #666)' }}>{recurrenceLabel(t.recurrence)}</span>
+          )}
+        </div>
+        {/* カスタム編集UI */}
+        {editingId === t.id && editingField === 'recurrence' && (
+          <div
+            style={{ display: 'grid', gap: 6, marginBottom: 8, padding: 10, border: '1px solid var(--input-border)', borderRadius: 8, background: 'var(--background)' }}
+            onBlur={(e) => {
+              // フォーカスがこのdivの外に出たら自動保存
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                let built: string = 'carry';
+                if (customUnit === 'day') { built = `custom:${customInterval}:day`; }
+                else if (customUnit === 'week') { built = `custom:${customInterval}:week:${customWeekDays.join(',')}`; }
+                else if (customUnit === 'month') {
+                  if (customMonthMode === 'date') { built = `custom:${customInterval}:month:date:${customMonthDay}`; }
+                  else { built = `custom:${customInterval}:month:nth:${customMonthNth}:${customMonthNthDay}`; }
+                }
+                else if (customUnit === 'year') { built = `custom:${customInterval}:year`; }
+                lastCustomRecurrenceRef.current = built;
+                setTodos((prev) => prev.map((todo) => (todo.id === t.id ? { ...todo, recurrence: built } : todo)));
+                fetch('/api/todos/' + t.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { recurrence: built } }) });
+                setEditingId(null);
+                setEditingField(null);
+              }
+            }}
+          >
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              <span>繰り返す間隔:</span>
+              <input type="number" min="1" value={customInterval} onChange={(e) => setCustomInterval(e.target.value)} className={styles.inputNarrow} style={{ width: 50 }} />
+              <select value={customUnit} onChange={(e) => setCustomUnit(e.target.value)} className={styles.input} style={{ width: 80 }}>
+                <option value="day">日</option>
+                <option value="week">週</option>
+                <option value="month">月</option>
+                <option value="year">年</option>
+              </select>
+              <span>ごと</span>
+            </div>
+            {customUnit === 'week' && (
+              <div>
+                <label className={styles.fieldLabel}>曜日</label>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                  {[
+                    { key: 'mon', label: '月' }, { key: 'tue', label: '火' }, { key: 'wed', label: '水' },
+                    { key: 'thu', label: '木' }, { key: 'fri', label: '金' }, { key: 'sat', label: '土' }, { key: 'sun', label: '日' },
+                  ].map((d) => {
+                    const selected: boolean = customWeekDays.includes(d.key);
+                    return (
+                      <button key={d.key} type="button" className={selected ? styles.primaryBtn : styles.iconBtn}
+                        style={{ width: 36, height: 36, padding: 0, fontSize: 13, borderRadius: '50%' }}
+                        onClick={() => {
+                          if (selected) { if (customWeekDays.length > 1) { setCustomWeekDays(customWeekDays.filter((k) => k !== d.key)); } }
+                          else { setCustomWeekDays([...customWeekDays, d.key]); }
+                        }}
+                      >{d.label}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {customUnit === 'month' && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+                  <input type="radio" checked={customMonthMode === 'date'} onChange={() => setCustomMonthMode('date')} />
+                  毎月
+                  <input type="number" min="1" max="31" value={customMonthDay} onChange={(e) => setCustomMonthDay(e.target.value)} className={styles.inputNarrow} style={{ width: 50 }} />
+                  日
+                </label>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', flexWrap: 'wrap' }}>
+                  <input type="radio" checked={customMonthMode === 'weekday'} onChange={() => setCustomMonthMode('weekday')} />
+                  第
+                  <select value={customMonthNth} onChange={(e) => setCustomMonthNth(e.target.value)} className={styles.input} style={{ width: 55 }}>
+                    <option value="1">1</option><option value="2">2</option><option value="3">3</option><option value="4">4</option>
+                  </select>
+                  <select value={customMonthNthDay} onChange={(e) => setCustomMonthNthDay(e.target.value)} className={styles.input} style={{ width: 90 }}>
+                    <option value="mon">月曜日</option><option value="tue">火曜日</option><option value="wed">水曜日</option>
+                    <option value="thu">木曜日</option><option value="fri">金曜日</option><option value="sat">土曜日</option><option value="sun">日曜日</option>
+                  </select>
+                </label>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: 4 }}>
+              <button type="button" className={styles.primaryBtn} style={{ fontSize: '14px', padding: '6px 14px' }}
+                onClick={() => {
+                  let built: string = 'carry';
+                  if (customUnit === 'day') { built = `custom:${customInterval}:day`; }
+                  else if (customUnit === 'week') { built = `custom:${customInterval}:week:${customWeekDays.join(',')}`; }
+                  else if (customUnit === 'month') {
+                    if (customMonthMode === 'date') { built = `custom:${customInterval}:month:date:${customMonthDay}`; }
+                    else { built = `custom:${customInterval}:month:nth:${customMonthNth}:${customMonthNthDay}`; }
+                  }
+                  else if (customUnit === 'year') { built = `custom:${customInterval}:year`; }
+                  lastCustomRecurrenceRef.current = built;
+                  setTodos((prev) => prev.map((todo) => (todo.id === t.id ? { ...todo, recurrence: built } : todo)));
+                  fetch('/api/todos/' + t.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ updates: { recurrence: built } }) });
+                  setEditingId(null);
+                  setEditingField(null);
+                }}
+              >保存</button>
+            </div>
+          </div>
+        )}
+
         {/* 移動操作ボタン */}
         <MoveButtonBar
           onUp={() => moveUp(t.id)}
@@ -1340,6 +1794,12 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       setTodos((prev) =>
         prev.map((todo) => (todo.id === id ? { ...todo, deadline } : todo)),
       );
+    } else if (editingField === 'recurrence') {
+      const newRec: string = editValue || 'carry';
+      updates.recurrence = newRec;
+      setTodos((prev) =>
+        prev.map((todo) => (todo.id === id ? { ...todo, recurrence: newRec } : todo)),
+      );
     }
 
     log('edit:save:ok', { id, field: editingField, value: editValue });
@@ -1405,7 +1865,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   }
 
   return (
-    <main className={styles.main}>
+    <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
       <header className={styles.topBar}>
         <h1 className={styles.headerTitle}>
           {activeTab === 'tasks' ? 'タスク' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
@@ -1460,9 +1920,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <button
                   type="button"
                   className={`${styles.menuSubItem} ${activeTab === 'matrix' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('matrix'); setMenuOpen(false); }}
+                  onClick={() => { switchTab('matrix'); }}
                 >
-                  アイゼンハワーマトリクス
+                  アイゼンハワーマトリクス {!isPro && '🔒'}
                 </button>
                 <button
                   type="button"
@@ -1509,9 +1969,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <button
                   type="button"
                   className={`${styles.menuSubItem} ${activeTab === 'diary-public' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('diary-public'); setMenuOpen(false); }}
+                  onClick={() => { switchTab('diary-public'); }}
                 >
-                  みんなの日記
+                  みんなの日記 {!isPro && '🔒'}
                 </button>
               </>
             )}
@@ -1605,8 +2065,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           setExpandedId(null);
         }
       }}>
-      {/* Add form */}
-      <section className={styles.addForm}>
+      {/* Add form — スマホでは非表示、FAB+モーダルで表示 */}
+      <section className={styles.addForm} style={isMobile ? { display: 'none' } : undefined}>
         <label className={styles.fieldLabel}>タスク名</label>
         <input
           data-tutorial="task-title-input"
@@ -1651,7 +2111,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               <option value="carry">繰り返さない</option>
               <option value="day">毎日</option>
               <option value="week:weekday">毎週平日（月〜金）</option>
-              <option value="week:mon">毎週月曜日</option>
+              <option value={`week:${todayDayKey}`}>毎週{todayDayName}曜日</option>
               <option value="month:same-date">毎月同じ日</option>
               <option value="year">毎年同じ日</option>
               <option value="custom">カスタム...</option>
@@ -1798,6 +2258,80 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           追加
         </button>
       </section>
+
+      {/* スマホ用：FABボタン */}
+      {isMobile && activeTab === 'tasks' && (
+        <button
+          type="button"
+          className={styles.fab}
+          onClick={() => setShowMobileAddForm(true)}
+        >
+          ＋
+        </button>
+      )}
+
+      {/* スマホ用：タスク追加モーダル */}
+      {isMobile && showMobileAddForm && (
+        <div className={styles.mobileAddModal} onClick={() => setShowMobileAddForm(false)}>
+          <div className={styles.mobileAddSheet} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.mobileAddHeader}>
+              <h3>タスク追加</h3>
+              <button type="button" className={styles.mobileAddClose} onClick={() => setShowMobileAddForm(false)}>×</button>
+            </div>
+            <label className={styles.fieldLabel}>タスク名</label>
+            <input
+              placeholder="例: レポートを書く"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={styles.input}
+              autoFocus
+            />
+            <label className={styles.fieldLabel} style={{ marginTop: 12 }}>詳細（任意）</label>
+            <textarea
+              placeholder="例: 第3章の結論部分を仕上げる"
+              value={detailText}
+              onChange={(e) => setDetailText(e.target.value)}
+              className={styles.textarea}
+              rows={2}
+            />
+            <label className={styles.fieldLabel} style={{ marginTop: 12 }}>予定時間（分）</label>
+            <input
+              placeholder="例: 60"
+              value={estText}
+              onChange={(e) => setEstText(e.target.value)}
+              className={styles.input}
+            />
+            <label className={styles.fieldLabel} style={{ marginTop: 12 }}>繰り返し</label>
+            <select
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              className={styles.input}
+            >
+              <option value="carry">繰り返さない</option>
+              <option value="day">毎日</option>
+              <option value="week:weekday">毎週平日（月〜金）</option>
+              <option value={`week:${todayDayKey}`}>毎週{todayDayName}曜日</option>
+              <option value="month:same-date">毎月同じ日</option>
+              <option value="year">毎年同じ日</option>
+            </select>
+            <label className={styles.fieldLabel} style={{ marginTop: 12 }}>締切（任意）</label>
+            <input
+              type="date"
+              value={deadlineText}
+              onChange={(e) => setDeadlineText(e.target.value)}
+              className={styles.input}
+            />
+            <button
+              type="button"
+              onClick={() => { addTodo(); setShowMobileAddForm(false); }}
+              className={styles.primaryBtn}
+              style={{ marginTop: 16, width: '100%' }}
+            >
+              追加
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 凡例 + 表示切替 */}
       <div className={styles.legendRow}>
@@ -1995,20 +2529,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   return;
                 }
                 const rect: DOMRect = e.currentTarget.getBoundingClientRect();
-                const third: number = rect.height / 3;
+                const half: number = rect.height / 2;
                 const relY: number = e.clientY - rect.top;
-                if (relY < third) {
-                  setDragOverId(null);
-                  setDragOverMode('between');
+                setDragOverId(null);
+                setDragOverMode('between');
+                if (relY < half) {
                   setDropBetweenIndex(idx);
-                } else if (relY > rect.height - third) {
-                  setDragOverId(null);
-                  setDragOverMode('between');
-                  setDropBetweenIndex(idx + 1);
                 } else {
-                  setDragOverId(t.id);
-                  setDragOverMode('child');
-                  setDropBetweenIndex(null);
+                  setDropBetweenIndex(idx + 1);
                 }
               }}
               onDragLeave={() => {
@@ -2020,23 +2548,40 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               onDrop={(e) => {
                 e.preventDefault();
                 if (dragId && dragId !== t.id) {
-                  if (dragOverMode === 'child') {
-                    changeParent(dragId, t.id);
+                  // 前後のタスクのsortOrderの中間値を計算
+                  const isBefore: boolean = dropBetweenIndex === idx;
+                  const targetIdx: number = isBefore ? idx : idx + 1;
+                  const prevItem: { todo: Todo } | undefined = treeList[targetIdx - 1];
+                  const nextItem: { todo: Todo } | undefined = treeList[targetIdx];
+                  let newOrder: number;
+                  if (prevItem && nextItem) {
+                    newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
+                  } else if (prevItem) {
+                    newOrder = prevItem.todo.sortOrder + 10;
+                  } else if (nextItem) {
+                    newOrder = nextItem.todo.sortOrder - 10;
                   } else {
-                    const newParentId: string | null = t.parentId ?? null;
-                    const isBefore: boolean = dropBetweenIndex === idx;
-                    const newOrder: number = isBefore ? t.sortOrder - 1 : t.sortOrder + 1;
-                    setTodos((prev) =>
-                      prev.map((todo) => (todo.id === dragId
-                        ? { ...todo, parentId: newParentId ?? undefined, sortOrder: newOrder }
-                        : todo)),
-                    );
-                    fetch('/api/todos/' + dragId, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
-                    });
+                    newOrder = 0;
                   }
+                  // 子孫のsortOrderも親との相対差を保って一緒に移動
+                  const draggedTodo: Todo | undefined = todos.find((todo) => todo.id === dragId);
+                  const oldOrder: number = draggedTodo?.sortOrder ?? 0;
+                  const diff: number = newOrder - oldOrder;
+                  const descendantIds: string[] = getDescendantIds(dragId, todos);
+                  const movedIds: Set<string> = new Set([dragId, ...descendantIds]);
+                  const rollback: Todo[] = todos;
+                  const updates: { id: string; sortOrder: number }[] = [];
+                  setTodos((prev) =>
+                    prev.map((todo) => {
+                      if (movedIds.has(todo.id)) {
+                        const updatedOrder: number = todo.sortOrder + diff;
+                        updates.push({ id: todo.id, sortOrder: updatedOrder });
+                        return { ...todo, sortOrder: updatedOrder };
+                      }
+                      return todo;
+                    }),
+                  );
+                  persistSortOrders(updates, rollback);
                 }
                 isDraggingRef.current = false;
                 setDragId(null);
@@ -2070,11 +2615,31 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   setDropBetweenIndex(null);
                 }}
               />
+              {/* 階層化ボタン（常時表示） */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginRight: 2 }}>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  style={{ fontSize: '15px', padding: '2px 6px', lineHeight: 1, minHeight: 'auto', minWidth: 'auto', opacity: 0.7 }}
+                  title="すぐ上のタスクの子にする"
+                  onClick={(e) => { e.stopPropagation(); moveRight(t.id); }}
+                >▶</button>
+                {t.parentId && (
+                  <button
+                    type="button"
+                    className={styles.iconBtn}
+                    style={{ fontSize: '15px', padding: '2px 6px', lineHeight: 1, minHeight: 'auto', minWidth: 'auto', opacity: 0.7 }}
+                    title="階層を1つ上げる"
+                    onClick={(e) => { e.stopPropagation(); moveLeft(t.id); }}
+                  >◀</button>
+                )}
+              </div>
               {/* Checkbox */}
               <input
                 type="checkbox"
                 checked={t.done}
                 onChange={() => toggleDone(t.id)}
+                onClick={(e) => e.stopPropagation()}
                 title={t.done ? '完了を取り消す' : '完了にする'}
                 className={styles.checkbox}
               />
@@ -2527,7 +3092,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'activity' && (
-        <ActivityPanel user={user} />
+        <ActivityPanel user={user} isPro={isPro} onShowProModal={() => setShowProModal(true)} />
       )}
 
       {activeTab === 'archived' && (
@@ -2558,9 +3123,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             <button
               type="button"
               className={`${styles.diaryModeBtn} ${activeTab === 'diary-public' ? styles.diaryModeBtnActive : ''}`}
-              onClick={() => setActiveTab('diary-public')}
+              onClick={() => switchTab('diary-public')}
             >
-              みんなの日記
+              みんなの日記 {!isPro && '🔒'}
             </button>
           </div>
           {activeTab === 'diary-write' && <DiaryWritePanel user={user} />}
@@ -2688,6 +3253,96 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             </button>
           </div>
         </>
+      )}
+
+      {/* プロ版購入モーダル */}
+      {showProModal && (
+        <div
+          className={styles.modalOverlay}
+          onClick={() => setShowProModal(false)}
+        >
+          <div
+            className={styles.modalContent}
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '400px', textAlign: 'center' }}
+          >
+            <h2 style={{ margin: '0 0 16px 0', fontSize: '20px' }}>プロ版にアップグレード</h2>
+            <p style={{ margin: '0 0 12px 0', color: '#666' }}>
+              以下の機能が解放されます：
+            </p>
+            <ul style={{ textAlign: 'left', margin: '0 0 16px 0', padding: '0 0 0 20px', lineHeight: '2' }}>
+              <li>アイゼンハワーマトリクス</li>
+              <li>パレート分析（作業記録）</li>
+              <li>みんなの日記（公開・閲覧）</li>
+            </ul>
+            <p style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 16px 0' }}>
+              ¥300（税込・買い切り）
+            </p>
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                onClick={() => { setShowProModal(false); startPurchase(); }}
+                disabled={proPurchasing}
+              >
+                {proPurchasing ? '処理中...' : '購入する'}
+              </button>
+              <button
+                type="button"
+                className={styles.iconBtn}
+                onClick={() => setShowProModal(false)}
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* スマホ用：下タブバー */}
+      {isMobile && (
+        <nav className={styles.bottomTabBar}>
+          <button
+            type="button"
+            className={`${styles.bottomTab} ${activeTab === 'tasks' || activeTab === 'task-sets' || activeTab === 'recurring' ? styles.bottomTabActive : ''}`}
+            onClick={() => setActiveTab('tasks')}
+          >
+            <span>📋</span>
+            <span>タスク</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.bottomTab} ${activeTab === 'diary-write' || activeTab === 'diary-view' || activeTab === 'diary-public' ? styles.bottomTabActive : ''}`}
+            onClick={() => setActiveTab('diary-write')}
+          >
+            <span>📔</span>
+            <span>日記</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.bottomTab} ${activeTab === 'activity' ? styles.bottomTabActive : ''}`}
+            onClick={() => setActiveTab('activity')}
+          >
+            <span>📊</span>
+            <span>記録</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.bottomTab} ${activeTab === 'mypage' ? styles.bottomTabActive : ''}`}
+            onClick={() => setActiveTab('mypage')}
+          >
+            <span>👤</span>
+            <span>マイページ</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.bottomTab} ${activeTab === 'settings' || activeTab === 'help' ? styles.bottomTabActive : ''}`}
+            onClick={() => setMenuOpen(true)}
+          >
+            <span>☰</span>
+            <span>その他</span>
+          </button>
+        </nav>
       )}
     </main>
   );
