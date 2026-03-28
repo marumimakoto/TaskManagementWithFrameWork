@@ -57,7 +57,7 @@ const WELCOME_MESSAGES: string[] = [
   'ペンギンは寒さに強いが暑さに弱い。種類によっては温暖な地域にも生息する',
   'シャチはイルカの仲間。見た目はクジラに近いが、分類上はイルカ科に属する',
   '蜂蜜は腐らない食品として知られる。水分が少なく、菌が繁殖しにくい',
-  'エベレストは毎年数ミリずつ高くなる。プレートの動きで少しずつ隆起する',
+  'エベレストは、地球のプレートの隆起によって、毎年数ミリずつ高くなる。',
   '人は寝ている間にコップ一杯分の汗をかく。体温調整のため無意識に行われる',
   '宇宙では音は伝わらない。空気がないため、振動を伝える媒体が存在しない',
   'クジラは意識的に呼吸する。眠っても完全に眠らず、片脳ずつ休ませる',
@@ -996,21 +996,26 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
     const newActual: number = target.actualMin + addMin;
 
+    const shouldStart: boolean = !target.started;
     setTodos((prev) =>
       prev.map((t) =>
         t.id === id
-          ? { ...t, actualMin: newActual, lastWorkedAt: workedAt }
+          ? { ...t, actualMin: newActual, lastWorkedAt: workedAt, started: true }
           : t,
       ),
     );
     setActualInputs((prev) => ({ ...prev, [id]: '' }));
     setActualDateInputs((prev) => ({ ...prev, [id]: '' }));
-    log('addLog:ok', { id, addMin, dateStr });
+    log('addLog:ok', { id, addMin, dateStr, autoStarted: shouldStart });
 
+    const updates: Record<string, unknown> = { actualMin: newActual, lastWorkedAt: workedAt };
+    if (shouldStart) {
+      updates.started = 1;
+    }
     await fetch('/api/todos/' + id, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: workedAt } }),
+      body: JSON.stringify({ updates }),
     });
   }
 
