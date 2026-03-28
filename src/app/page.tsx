@@ -675,6 +675,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   // 表示モード
   const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid' | 'kanban'>('detail');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'danger' | 'inProgress' | 'done'>('all');
 
   // スマホではグリッド・カンバンモードを使えないようにする
   useEffect(() => {
@@ -822,6 +823,26 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
     return result;
   }, [sorted, todos.length]);
+
+  /** ステータスフィルターを適用したtreeList */
+  const filteredTreeList: { todo: Todo; depth: number }[] = useMemo((): { todo: Todo; depth: number }[] => {
+    if (statusFilter === 'all') {
+      return treeList;
+    }
+    return treeList.filter(({ todo: t }) => {
+      const bg: string = cardBgClass(t);
+      if (statusFilter === 'danger') {
+        return bg === 'cardDanger';
+      }
+      if (statusFilter === 'inProgress') {
+        return bg === 'cardInProgress';
+      }
+      if (statusFilter === 'done') {
+        return bg === 'cardDone';
+      }
+      return true;
+    });
+  }, [treeList, statusFilter]);
 
   /** FLIPアニメーション: treeListが変わった後にカードの移動をアニメーションする */
   useEffect(() => {
@@ -2505,15 +2526,27 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       {/* 凡例 + 表示切替 */}
       <div className={styles.legendRow}>
         <div className={styles.legend}>
-          <span className={styles.legendItem}>
+          <span
+            className={styles.legendItem}
+            style={{ cursor: 'pointer', opacity: statusFilter === 'all' || statusFilter === 'danger' ? 1 : 0.4, fontWeight: statusFilter === 'danger' ? 700 : 400 }}
+            onClick={() => setStatusFilter(statusFilter === 'danger' ? 'all' : 'danger')}
+          >
             <span className={styles.legendDot} style={{ background: '#ef4444' }} />
             リスクあり({legendCounts.danger})
           </span>
-          <span className={styles.legendItem}>
+          <span
+            className={styles.legendItem}
+            style={{ cursor: 'pointer', opacity: statusFilter === 'all' || statusFilter === 'inProgress' ? 1 : 0.4, fontWeight: statusFilter === 'inProgress' ? 700 : 400 }}
+            onClick={() => setStatusFilter(statusFilter === 'inProgress' ? 'all' : 'inProgress')}
+          >
             <span className={styles.legendDot} style={{ background: '#3b82f6' }} />
             進行中({legendCounts.inProgress})
           </span>
-          <span className={styles.legendItem}>
+          <span
+            className={styles.legendItem}
+            style={{ cursor: 'pointer', opacity: statusFilter === 'all' || statusFilter === 'done' ? 1 : 0.4, fontWeight: statusFilter === 'done' ? 700 : 400 }}
+            onClick={() => setStatusFilter(statusFilter === 'done' ? 'all' : 'done')}
+          >
             <span className={styles.legendDot} style={{ background: '#22c55e' }} />
             完了({legendCounts.done})
           </span>
@@ -2610,7 +2643,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {/* Todo list — detail (既存の詳細表示) */}
       {viewMode === 'detail' && <section data-tutorial="task-list" className={`${styles.todoList} ${dragId ? styles.todoListDragging : ''}`}>
-        {treeList.map(({ todo: t, depth }, idx) => {
+        {filteredTreeList.map(({ todo: t, depth }, idx) => {
           const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
           const isEditingThis: boolean = editingId === t.id;
           const isExpanded: boolean = expandedId === t.id;
@@ -3143,7 +3176,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       {/* Todo list — compact（タスク名+期限+階層+詳細展開） */}
       {viewMode === 'compact' && (
         <section className={styles.todoListCompact}>
-          {treeList.map(({ todo: t, depth }) => {
+          {filteredTreeList.map(({ todo: t, depth }) => {
             const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
             const isExpanded: boolean = expandedId === t.id;
             const isEditingDeadline: boolean = editingId === t.id && editingField === 'deadline';
@@ -3219,7 +3252,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       {/* Todo list — grid（コンパクト+横2列） */}
       {viewMode === 'grid' && (
         <section className={styles.todoListGrid}>
-          {treeList.map(({ todo: t, depth }) => {
+          {filteredTreeList.map(({ todo: t, depth }) => {
             const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
             const isEditingDeadline: boolean = editingId === t.id && editingField === 'deadline';
             return (
