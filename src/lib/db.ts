@@ -232,6 +232,7 @@ async function initializeTables(c: Client): Promise<void> {
       est_min INTEGER NOT NULL DEFAULT 30,
       detail TEXT NOT NULL DEFAULT '',
       recurrence TEXT NOT NULL,
+      deadline_offset_days INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,

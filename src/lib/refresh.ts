@@ -175,6 +175,7 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     est_min: number;
     detail: string;
     recurrence: string;
+    deadline_offset_days: number | null;
   }
 
   const rules: RuleRow[] = await db.all<RuleRow>(
@@ -198,9 +199,17 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
       continue;
     }
     const newId: string = crypto.randomUUID();
+    // 期限: deadline_offset_daysが設定されていれば、今日 + offset日の23:59:59
+    let deadline: number | null = null;
+    if (rule.deadline_offset_days !== null && rule.deadline_offset_days >= 0) {
+      const d: Date = new Date();
+      d.setDate(d.getDate() + rule.deadline_offset_days);
+      d.setHours(23, 59, 59, 999);
+      deadline = d.getTime();
+    }
     await db.run(
-      'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      newId, userId, rule.title, rule.est_min, rule.recurrence, rule.detail, now
+      'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      newId, userId, rule.title, rule.est_min, rule.recurrence, rule.detail, deadline, now
     );
     existingTitles.add(rule.title);
     addedCount++;

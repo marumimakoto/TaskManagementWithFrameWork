@@ -84,8 +84,8 @@ export async function PUT(
 
   // 繰り返し設定が変更された場合、recurring_rulesを更新
   if (updates.recurrence !== undefined) {
-    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string }>(
-      'SELECT user_id, title, est_min, detail FROM todos WHERE id = ?', id
+    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null }>(
+      'SELECT user_id, title, est_min, detail, deadline FROM todos WHERE id = ?', id
     );
     if (todo) {
       // 既存ルール（同タイトル）を無効化
@@ -95,10 +95,23 @@ export async function PUT(
       );
       // 新しいルールがcarry以外なら登録
       if (updates.recurrence !== 'carry') {
+        // 期限オフセット: 期限が設定されていれば「期限 - 今日」の日数を保存
+        let deadlineOffsetDays: number | null = null;
+        const currentDeadline: number | null = updates.deadline !== undefined ? (updates.deadline as number | null) : todo.deadline;
+        if (currentDeadline) {
+          const nowDate: Date = new Date();
+          nowDate.setHours(0, 0, 0, 0);
+          const deadlineDate: Date = new Date(currentDeadline);
+          deadlineDate.setHours(0, 0, 0, 0);
+          deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
+          if (deadlineOffsetDays < 0) {
+            deadlineOffsetDays = 0;
+          }
+        }
         const ruleId: string = crypto.randomUUID();
         await db.run(
-          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
-          ruleId, todo.user_id, todo.title, todo.est_min, todo.detail, updates.recurrence
+          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          ruleId, todo.user_id, todo.title, todo.est_min, todo.detail, updates.recurrence, deadlineOffsetDays
         );
       }
     }

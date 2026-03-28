@@ -108,10 +108,22 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       userId, todo.title, todo.recurrence
     );
     if (!existing) {
+      // 期限オフセット: 期限が設定されていれば「期限 - 作成日」の日数を保存
+      let deadlineOffsetDays: number | null = null;
+      if (todo.deadline) {
+        const nowDate: Date = new Date();
+        nowDate.setHours(0, 0, 0, 0);
+        const deadlineDate: Date = new Date(todo.deadline);
+        deadlineDate.setHours(0, 0, 0, 0);
+        deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
+        if (deadlineOffsetDays < 0) {
+          deadlineOffsetDays = 0;
+        }
+      }
       const ruleId: string = crypto.randomUUID();
       await db.run(
-        'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence) VALUES (?, ?, ?, ?, ?, ?)',
-        ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence
+        'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence, deadlineOffsetDays
       );
     }
   }
