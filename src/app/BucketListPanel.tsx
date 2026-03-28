@@ -97,6 +97,17 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
   const defaultYear: string = String(currentYear + 5);
   const [newDeadlineYear, setNewDeadlineYear] = useState<string>(defaultYear);
 
+  // 共有リンク
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState<boolean>(false);
+
+  // タブ（自分 / 共有リスト閲覧）
+  const [bucketTab, setBucketTab] = useState<'mine' | 'shared'>('mine');
+  const [sharedUrl, setSharedUrl] = useState<string>('');
+  const [sharedData, setSharedData] = useState<{ ownerName: string; ownerAvatar: string; items: Array<{ id: string; title: string; detail: string; category: string; deadlineYear: number | null; done: boolean }>; categories: string[] } | null>(null);
+  const [sharedLoading, setSharedLoading] = useState<boolean>(false);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+
   // カテゴリ管理
   const [showCategoryManager, setShowCategoryManager] = useState<boolean>(false);
   const [newCategoryName, setNewCategoryName] = useState<string>('');
@@ -133,6 +144,15 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
 
   useEffect(() => {
     fetchItems();
+    // 既存の共有トークンを取得
+    fetch('/api/bucket-list/share?userId=' + user.id)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.shareToken) {
+          setShareToken(data.shareToken);
+        }
+      })
+      .catch(() => {});
   }, [fetchItems]);
 
   /** アイテム追加 */
@@ -276,9 +296,135 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
     return <div style={{ padding: 24, color: 'var(--muted)' }}>読み込み中...</div>;
   }
 
+  /** 共有リンクからトークンを抽出して閲覧する */
+  async function loadSharedList(): Promise<void> {
+    const url: string = sharedUrl.trim();
+    if (!url) {
+      return;
+    }
+    // URLからトークンを抽出（/share/bucket/xxxxx の xxxxx 部分）
+    const match: RegExpMatchArray | null = url.match(/\/share\/bucket\/([a-f0-9]+)/);
+    const token: string = match ? match[1] : url;
+
+    setSharedLoading(true);
+    setSharedError(null);
+    try {
+      const res: Response = await fetch('/api/bucket-list/share?token=' + token);
+      if (!res.ok) {
+        setSharedError('このリンクは無効です');
+        return;
+      }
+      const data = await res.json();
+      setSharedData(data);
+    } catch {
+      setSharedError('読み込みに失敗しました');
+    } finally {
+      setSharedLoading(false);
+    }
+  }
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <h2 style={{ fontSize: 20, marginBottom: 12 }}>人生のやりたいことリスト</h2>
+
+      {/* タブ切替 */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
+        <button
+          onClick={() => setBucketTab('mine')}
+          style={{
+            flex: 1, padding: '10px 0', border: '1px solid var(--card-border)',
+            borderRadius: '8px 0 0 8px', cursor: 'pointer', fontWeight: 600,
+            background: bucketTab === 'mine' ? '#3b82f6' : 'var(--card-bg)',
+            color: bucketTab === 'mine' ? 'white' : 'var(--foreground)',
+          }}
+        >
+          自分のリスト
+        </button>
+        <button
+          onClick={() => setBucketTab('shared')}
+          style={{
+            flex: 1, padding: '10px 0', border: '1px solid var(--card-border)',
+            borderRadius: '0 8px 8px 0', cursor: 'pointer', fontWeight: 600,
+            background: bucketTab === 'shared' ? '#3b82f6' : 'var(--card-bg)',
+            color: bucketTab === 'shared' ? 'white' : 'var(--foreground)',
+          }}
+        >
+          共有リストを見る
+        </button>
+      </div>
+
+      {/* 共有リスト閲覧タブ */}
+      {bucketTab === 'shared' && (
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <input
+              placeholder="共有リンクのURLを貼り付け"
+              value={sharedUrl}
+              onChange={(e) => setSharedUrl(e.target.value)}
+              className={styles.input}
+              onKeyDown={(e) => { if (e.key === 'Enter') { loadSharedList(); } }}
+            />
+            <button onClick={loadSharedList} className={styles.primaryBtn} style={{ whiteSpace: 'nowrap' }}>
+              閲覧
+            </button>
+          </div>
+          {sharedLoading && <p style={{ color: 'var(--muted)' }}>読み込み中...</p>}
+          {sharedError && <p style={{ color: '#ef4444' }}>{sharedError}</p>}
+          {sharedData && (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                {sharedData.ownerAvatar ? (
+                  <img src={sharedData.ownerAvatar} alt="" style={{ width: 40, height: 40, borderRadius: '50%' }} />
+                ) : (
+                  <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>👤</div>
+                )}
+                <span style={{ fontWeight: 700, fontSize: 16 }}>{sharedData.ownerName} のやりたいことリスト</span>
+              </div>
+              <div style={{ marginBottom: 12, fontSize: 14, color: 'var(--muted)' }}>
+                {sharedData.items.filter((i) => i.done).length} / {sharedData.items.length} 達成
+              </div>
+              <div style={{ display: 'grid', gap: 8 }}>
+                {sharedData.items.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      padding: '10px 14px',
+                      background: item.done ? '#f0fdf4' : 'var(--card-bg)',
+                      border: `1px solid ${item.done ? '#bbf7d0' : 'var(--card-border)'}`,
+                      borderLeft: `4px solid ${item.done ? '#22c55e' : '#3b82f6'}`,
+                      borderRadius: 10,
+                      display: 'flex', alignItems: 'flex-start', gap: 10,
+                    }}
+                  >
+                    <span style={{ fontSize: 16, marginTop: 2 }}>{item.done ? '✅' : '⬜'}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: 600, textDecoration: item.done ? 'line-through' : 'none', opacity: item.done ? 0.6 : 1 }}>
+                          {item.title}
+                        </span>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                            {item.category}
+                          </span>
+                          {item.deadlineYear && (
+                            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{item.deadlineYear}年</span>
+                          )}
+                        </div>
+                      </div>
+                      {item.detail && (
+                        <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 4 }}>{item.detail}</div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 自分のリスト */}
+      {bucketTab === 'mine' && <>
 
       {/* 達成率 */}
       <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
@@ -379,6 +525,42 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
               }}
             />
           </label>
+          <button
+            className={styles.iconBtn}
+            style={{ fontSize: 13 }}
+            onClick={async () => {
+              const res: Response = await fetch('/api/bucket-list/share', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: user.id }),
+              });
+              const data = await res.json();
+              const token: string = data.shareToken;
+              setShareToken(token);
+              const shareUrl: string = window.location.origin + '/share/bucket/' + token;
+              await navigator.clipboard.writeText(shareUrl);
+              setShareCopied(true);
+              setTimeout(() => setShareCopied(false), 2000);
+            }}
+          >
+            {shareCopied ? 'コピーしました！' : shareToken ? '共有リンクをコピー' : '共有リンクを作成'}
+          </button>
+          {shareToken && (
+            <button
+              className={styles.dangerIconBtn}
+              style={{ fontSize: 13 }}
+              onClick={async () => {
+                await fetch('/api/bucket-list/share', {
+                  method: 'DELETE',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ userId: user.id }),
+                });
+                setShareToken(null);
+              }}
+            >
+              共有を停止
+            </button>
+          )}
         </div>
       )}
 
@@ -641,8 +823,10 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
         ))}
       </div>
 
+      </>}
+
       {/* スマホ用＋ボタン */}
-      {isMobile && (
+      {isMobile && bucketTab === 'mine' && (
         <button
           onClick={() => setShowMobileForm(true)}
           style={{
