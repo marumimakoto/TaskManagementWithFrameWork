@@ -22,6 +22,63 @@ type BucketCategory = {
   name: string;
 };
 
+/** やりたいことリストをXMLに変換する */
+function buildExportXml(items: BucketItem[], categories: BucketCategory[]): string {
+  const lines: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', '<bucketList>'];
+  lines.push('  <categories>');
+  for (const cat of categories) {
+    lines.push(`    <category>${escapeXml(cat.name)}</category>`);
+  }
+  lines.push('  </categories>');
+  lines.push('  <items>');
+  for (const item of items) {
+    lines.push('    <item>');
+    lines.push(`      <title>${escapeXml(item.title)}</title>`);
+    lines.push(`      <detail>${escapeXml(item.detail)}</detail>`);
+    lines.push(`      <category>${escapeXml(item.category)}</category>`);
+    lines.push(`      <deadlineYear>${item.deadlineYear ?? ''}</deadlineYear>`);
+    lines.push(`      <done>${item.done ? 'true' : 'false'}</done>`);
+    lines.push('    </item>');
+  }
+  lines.push('  </items>');
+  lines.push('</bucketList>');
+  return lines.join('\n');
+}
+
+/** XML特殊文字をエスケープする */
+function escapeXml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** XMLからやりたいことリストをパースする */
+function parseImportXml(xml: string): { items: Array<{ title: string; detail: string; category: string; deadlineYear: number | null; done: boolean }>; categories: string[] } {
+  const parser: DOMParser = new DOMParser();
+  const doc: Document = parser.parseFromString(xml, 'application/xml');
+  const categories: string[] = [];
+  const catNodes: NodeListOf<Element> = doc.querySelectorAll('categories > category');
+  catNodes.forEach((node) => {
+    const name: string = node.textContent?.trim() ?? '';
+    if (name) {
+      categories.push(name);
+    }
+  });
+  const items: Array<{ title: string; detail: string; category: string; deadlineYear: number | null; done: boolean }> = [];
+  const itemNodes: NodeListOf<Element> = doc.querySelectorAll('items > item');
+  itemNodes.forEach((node) => {
+    const title: string = node.querySelector('title')?.textContent?.trim() ?? '';
+    if (!title) {
+      return;
+    }
+    const detail: string = node.querySelector('detail')?.textContent?.trim() ?? '';
+    const category: string = node.querySelector('category')?.textContent?.trim() ?? '未分類';
+    const yearStr: string = node.querySelector('deadlineYear')?.textContent?.trim() ?? '';
+    const deadlineYear: number | null = yearStr ? parseInt(yearStr, 10) : null;
+    const done: boolean = node.querySelector('done')?.textContent?.trim() === 'true';
+    items.push({ title, detail, category, deadlineYear, done });
+  });
+  return { items, categories };
+}
+
 /**
  * 人生のやりたいことリストパネル
  */
@@ -236,6 +293,94 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
           {doneCount} / {totalCount} 達成
         </div>
       </div>
+
+      {/* エクスポート/インポート（PC版のみ） */}
+      {!isMobile && items.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button
+            className={styles.iconBtn}
+            style={{ fontSize: 13 }}
+            onClick={() => {
+              const xml: string = buildExportXml(items, categories);
+              const blob: Blob = new Blob([xml], { type: 'application/xml' });
+              const url: string = URL.createObjectURL(blob);
+              const a: HTMLAnchorElement = document.createElement('a');
+              a.href = url;
+              a.download = 'bucket-list.xml';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            エクスポート（XML）
+          </button>
+          <label className={styles.iconBtn} style={{ fontSize: 13, cursor: 'pointer' }}>
+            インポート（XML）
+            <input
+              type="file"
+              accept=".xml"
+              style={{ display: 'none' }}
+              onChange={async (e) => {
+                const file: File | undefined = e.target.files?.[0];
+                if (!file) {
+                  return;
+                }
+                const text: string = await file.text();
+                const imported: { items: Array<{ title: string; detail: string; category: string; deadlineYear: number | null; done: boolean }>; categories: string[] } = parseImportXml(text);
+                if (imported.items.length === 0) {
+                  alert('インポートできる項目がありませんでした');
+                  return;
+                }
+                // カテゴリを追加
+                for (const catName of imported.categories) {
+                  if (!categories.some((c) => c.name === catName)) {
+                    const res: Response = await fetch('/api/bucket-list', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ type: 'category', userId: user.id, name: catName }),
+                    });
+                    const data = await res.json();
+                    setCategories((prev) => [...prev, { id: data.id, name: catName }]);
+                  }
+                }
+                // アイテムを追加
+                for (const item of imported.items) {
+                  const res: Response = await fetch('/api/bucket-list', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      userId: user.id,
+                      title: item.title,
+                      detail: item.detail,
+                      category: item.category,
+                      deadlineYear: item.deadlineYear,
+                    }),
+                  });
+                  const data = await res.json();
+                  setItems((prev) => [{
+                    id: data.id,
+                    title: item.title,
+                    detail: item.detail,
+                    category: item.category,
+                    deadlineYear: item.deadlineYear,
+                    done: item.done,
+                    sortOrder: 0,
+                    createdAt: Date.now(),
+                  }, ...prev]);
+                  if (item.done) {
+                    await fetch('/api/bucket-list', {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ id: data.id, updates: { done: true } }),
+                    });
+                  }
+                }
+                alert(`${imported.items.length}件インポートしました`);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      )}
 
       {/* 追加フォーム（共通部品） */}
       {(() => {
