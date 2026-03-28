@@ -3047,25 +3047,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 </div>
               )}
 
-              {/* 着手/未着手バッジ（クリックで切り替え） */}
+              {/* 着手/未着手バッジ（実績 > 0 なら着手） */}
               {!t.done && (
-                <span
-                  className={t.started ? styles.badgeOk : styles.badgeNg}
-                  style={{ cursor: 'pointer' }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const newStarted: boolean = !t.started;
-                    setTodos((prev) =>
-                      prev.map((todo) => (todo.id === t.id ? { ...todo, started: newStarted } : todo)),
-                    );
-                    fetch('/api/todos/' + t.id, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ updates: { started: newStarted } }),
-                    });
-                  }}
-                >
-                  {t.started ? '着手' : '未着手'}
+                <span className={t.actualMin > 0 ? styles.badgeOk : styles.badgeNg}>
+                  {t.actualMin > 0 ? '着手' : '未着手'}
                 </span>
               )}
 
@@ -3303,8 +3288,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {/* カンバン表示 */}
       {viewMode === 'kanban' && (() => {
-        const notStarted: Todo[] = todos.filter((t) => !t.done && !t.started);
-        const inProgress: Todo[] = todos.filter((t) => !t.done && t.started);
+        const notStarted: Todo[] = todos.filter((t) => !t.done && t.actualMin <= 0);
+        const inProgress: Todo[] = todos.filter((t) => !t.done && t.actualMin > 0);
         const doneTasks: Todo[] = todos.filter((t) => t.done);
 
         function renderKanbanCard(t: Todo): React.ReactElement {

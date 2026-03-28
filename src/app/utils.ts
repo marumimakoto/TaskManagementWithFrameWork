@@ -185,8 +185,8 @@ export function cardBgClass(t: Todo): 'cardDone' | 'cardDanger' | 'cardInProgres
   const now: number = Date.now();
   const DAY_MS: number = 24 * 60 * 60 * 1000;
 
-  // 未着手のまま作成から3日経過
-  if (!t.started && t.createdAt) {
+  // 未着手（実績0）のまま作成から3日経過
+  if (t.actualMin <= 0 && t.createdAt) {
     const daysSinceCreated: number = (now - t.createdAt) / DAY_MS;
     if (daysSinceCreated >= 3) {
       return 'cardDanger';
