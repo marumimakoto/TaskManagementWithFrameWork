@@ -33,7 +33,9 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDetail, setNewDetail] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('');
-  const [newDeadlineYear, setNewDeadlineYear] = useState<string>('');
+  const currentYear: number = new Date().getFullYear();
+  const defaultYear: string = String(currentYear + 5);
+  const [newDeadlineYear, setNewDeadlineYear] = useState<string>(defaultYear);
 
   // カテゴリ管理
   const [showCategoryManager, setShowCategoryManager] = useState<boolean>(false);
@@ -316,14 +318,22 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
           )}
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <input
-              type="number"
-              placeholder="目標年（例: 2030）"
-              value={newDeadlineYear}
-              onChange={(e) => setNewDeadlineYear(e.target.value)}
-              className={styles.input}
-            />
-            <button onClick={addItem} className={styles.primaryBtn}>追加</button>
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>目標年</div>
+              <select
+                value={newDeadlineYear}
+                onChange={(e) => setNewDeadlineYear(e.target.value)}
+                className={styles.input}
+              >
+                <option value="">指定しない</option>
+                {Array.from({ length: 31 }, (_, i) => currentYear + i).map((year) => (
+                  <option key={year} value={String(year)}>{year}年</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button onClick={addItem} className={styles.primaryBtn} style={{ width: '100%' }}>追加</button>
+            </div>
           </div>
         </div>
       </div>
@@ -421,7 +431,12 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: 8 }}>
-                  <input type="number" placeholder="目標年" value={editDeadlineYear} onChange={(e) => setEditDeadlineYear(e.target.value)} className={styles.input} style={{ width: 100 }} />
+                  <select value={editDeadlineYear} onChange={(e) => setEditDeadlineYear(e.target.value)} className={styles.input} style={{ width: 120 }}>
+                    <option value="">指定しない</option>
+                    {Array.from({ length: 31 }, (_, i) => currentYear + i).map((year) => (
+                      <option key={year} value={String(year)}>{year}年</option>
+                    ))}
+                  </select>
                   <button onClick={saveEdit} className={styles.primaryBtn} style={{ padding: '6px 16px' }}>保存</button>
                   <button onClick={() => setEditingId(null)} className={styles.iconBtn}>キャンセル</button>
                 </div>
