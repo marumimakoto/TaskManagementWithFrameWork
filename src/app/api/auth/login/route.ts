@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getDb } from '@/lib/db';
+import { validateEmail, validatePassword, checkRateLimit, getClientIp } from '@/lib/security';
 
 /** DBのusersテーブルの行データ */
 interface UserRow {
@@ -17,15 +18,28 @@ interface UserRow {
 /**
  * メールアドレスとパスワードでログインする
  * パスワードはbcryptでハッシュ比較する
+ * レート制限: 同一IPから5回/分まで
  * @param request - { email, password } を含むJSONリクエスト
  * @returns 成功時: { user: { id, name, email } }、失敗時: { error }
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // レート制限（5回/分）
+  const clientIp: string = getClientIp(request);
+  if (!checkRateLimit('login:' + clientIp, 5, 60000)) {
+    return NextResponse.json({ error: 'ログイン試行回数が上限に達しました。1分後にお試しください' }, { status: 429 });
+  }
+
   const body: { email?: string; password?: string } = await request.json();
   const { email, password } = body;
 
-  if (!email || !password) {
-    return NextResponse.json({ error: 'メールアドレスとパスワードは必須です' }, { status: 400 });
+  // バリデーション
+  const emailCheck = validateEmail(email);
+  if (!emailCheck.ok) {
+    return NextResponse.json({ error: emailCheck.message }, { status: 400 });
+  }
+  const passwordCheck = validatePassword(password);
+  if (!passwordCheck.ok) {
+    return NextResponse.json({ error: passwordCheck.message }, { status: 400 });
   }
 
   const db = await getDb();
@@ -37,7 +51,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'このメールアドレスは登録されていません' }, { status: 401 });
   }
 
-  const isValid: boolean = await bcrypt.compare(password, row.password_hash);
+  const isValid: boolean = await bcrypt.compare(password as string, row.password_hash);
   if (!isValid) {
     return NextResponse.json({ error: 'パスワードが違います' }, { status: 401 });
   }
