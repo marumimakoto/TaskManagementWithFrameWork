@@ -299,6 +299,7 @@ export default function Page(): React.ReactElement {
     return (
       <div className={`${styles.welcomeOverlay} ${welcomeFading ? styles.welcomeFadeOut : ''}`}>
         <div className={styles.welcomeContent}>
+          <h1 style={{ fontSize: 36, fontWeight: 700, letterSpacing: 4, marginBottom: 8 }}>Kiroku</h1>
           <p className={styles.welcomeDate}>
             {new Date().toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })}
           </p>
