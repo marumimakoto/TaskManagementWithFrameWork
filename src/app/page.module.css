@@ -1926,8 +1926,8 @@
 }
 
 .diaryModeBtnActive {
-  background: #3b82f6;
-  color: #ffffff;
+  background: #3b82f6 !important;
+  color: #ffffff !important;
   font-weight: 600;
 }
 
