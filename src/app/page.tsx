@@ -483,6 +483,22 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [undoToasts, setUndoToasts] = useState<UndoToast[]>([]);
   const deleteOnceRef = useRef<Record<string, number>>({});
 
+  /** FLIPアニメーション用: 各カードのDOM要素を保持 */
+  const cardRefsMap = useRef<Record<string, HTMLElement | null>>({});
+  /** FLIPアニメーション用: ソート前の各カードの位置を保持 */
+  const prevPositions = useRef<Record<string, DOMRect>>({});
+
+  /** ソート前にカードの位置を記録する */
+  function snapshotCardPositions(): void {
+    const positions: Record<string, DOMRect> = {};
+    for (const [id, el] of Object.entries(cardRefsMap.current)) {
+      if (el) {
+        positions[id] = el.getBoundingClientRect();
+      }
+    }
+    prevPositions.current = positions;
+  }
+
   /** APIからログインユーザーのタスク一覧を取得してstateに反映する */
   const fetchTodos = useCallback(async (): Promise<void> => {
     try {
@@ -728,6 +744,41 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
     return result;
   }, [sorted, todos.length]);
+
+  /** FLIPアニメーション: treeListが変わった後にカードの移動をアニメーションする */
+  useEffect(() => {
+    const prev: Record<string, DOMRect> = prevPositions.current;
+    if (Object.keys(prev).length === 0) {
+      return;
+    }
+    for (const { todo } of treeList) {
+      const el: HTMLElement | null = cardRefsMap.current[todo.id] ?? null;
+      if (!el) {
+        continue;
+      }
+      const oldRect: DOMRect | undefined = prev[todo.id];
+      if (!oldRect) {
+        continue;
+      }
+      const newRect: DOMRect = el.getBoundingClientRect();
+      const deltaY: number = oldRect.top - newRect.top;
+      if (Math.abs(deltaY) < 2) {
+        continue;
+      }
+      // Invert: 前の位置に戻す
+      el.style.transform = `translateY(${deltaY}px)`;
+      el.style.transition = 'none';
+      // Play: アニメーションで新しい位置に移動
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 0.5s ease';
+        el.style.transform = '';
+        el.addEventListener('transitionend', () => {
+          el.style.transition = '';
+        }, { once: true });
+      });
+    }
+    prevPositions.current = {};
+  }, [treeList]);
 
   /** キーボードで選択タスクを操作する（↑↓=移動、→=階層深く、←=階層浅く、Esc=選択解除） */
   useEffect(() => {
@@ -1065,6 +1116,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
    * @param id - 対象タスクのID
    */
   async function toggleDone(id: string): Promise<void> {
+    // FLIPアニメーション: ソート前の位置を記録
+    snapshotCardPositions();
+
     const target: Todo | undefined = todos.find((t) => t.id === id);
     if (!target) {
       log('toggleDone:notFound', { id });
@@ -2545,6 +2599,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 ←
               </div>
             <article
+              ref={(el) => { cardRefsMap.current[t.id] = el; }}
               className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''}`}
               style={{ fontSize: Math.pow(0.9, depth) + 'em', flex: 1 }}
               onClick={() => {
