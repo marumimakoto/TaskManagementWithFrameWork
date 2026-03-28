@@ -643,6 +643,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [dragOverMode, setDragOverMode] = useState<'child' | 'between' | null>(null);
   const [dropBetweenIndex, setDropBetweenIndex] = useState<number | null>(null);
 
+  // スマホ用スワイプ
+  const touchStartRef = useRef<{ x: number; y: number; id: string; time: number } | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState<Record<string, number>>({});
+  const [swipeAction, setSwipeAction] = useState<Record<string, 'nest' | 'unnest' | null>>({});
+
   const sorted: Todo[] = useMemo((): Todo[] => {
     const copied: Todo[] = [...todos];
 
@@ -2633,12 +2638,65 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             <article
               ref={(el) => { cardRefsMap.current[t.id] = el; }}
               className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''}`}
-              style={{ fontSize: Math.pow(0.9, depth) + 'em', flex: 1 }}
+              style={{
+                fontSize: Math.pow(0.9, depth) + 'em',
+                flex: 1,
+                transform: swipeOffset[t.id] ? `translateX(${swipeOffset[t.id]}px)` : undefined,
+                transition: swipeOffset[t.id] ? 'none' : 'transform 0.3s ease',
+                background: swipeAction[t.id] === 'nest' ? '#dbeafe' : swipeAction[t.id] === 'unnest' ? '#fef3c7' : undefined,
+              }}
               onClick={() => {
                 if (!isDraggingRef.current) {
                   setSelectedId(t.id);
                   toggleExpand(t.id);
                 }
+              }}
+              onTouchStart={(e) => {
+                if (!isMobile) {
+                  return;
+                }
+                const touch = e.touches[0];
+                touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: t.id, time: Date.now() };
+              }}
+              onTouchMove={(e) => {
+                if (!isMobile || !touchStartRef.current || touchStartRef.current.id !== t.id) {
+                  return;
+                }
+                const touch = e.touches[0];
+                const dx: number = touch.clientX - touchStartRef.current.x;
+                const dy: number = touch.clientY - touchStartRef.current.y;
+                // 縦スクロールが大きければスワイプとみなさない
+                if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+                  touchStartRef.current = null;
+                  setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
+                  setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                  return;
+                }
+                if (Math.abs(dx) > 15) {
+                  e.preventDefault();
+                  setSwipeOffset((prev) => ({ ...prev, [t.id]: dx }));
+                  if (dx < -60) {
+                    setSwipeAction((prev) => ({ ...prev, [t.id]: 'nest' }));
+                  } else if (dx > 60 && t.parentId) {
+                    setSwipeAction((prev) => ({ ...prev, [t.id]: 'unnest' }));
+                  } else {
+                    setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                  }
+                }
+              }}
+              onTouchEnd={() => {
+                if (!isMobile || !touchStartRef.current || touchStartRef.current.id !== t.id) {
+                  return;
+                }
+                const action = swipeAction[t.id];
+                if (action === 'nest') {
+                  moveRight(t.id);
+                } else if (action === 'unnest' && t.parentId) {
+                  moveLeft(t.id);
+                }
+                setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
+                setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                touchStartRef.current = null;
               }}
               onDragOver={(e) => {
                 e.preventDefault();
@@ -2755,6 +2813,22 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   )}
                 </div>
               )}
+              {/* スワイプヒント（スマホのみ） */}
+              {isMobile && swipeAction[t.id] && (
+                <div style={{
+                  position: 'absolute',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  ...(swipeAction[t.id] === 'nest' ? { right: 12 } : { left: 12 }),
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: swipeAction[t.id] === 'nest' ? '#2563eb' : '#d97706',
+                  pointerEvents: 'none',
+                }}>
+                  {swipeAction[t.id] === 'nest' ? '▶ 階層化' : '◀ ルートに戻す'}
+                </div>
+              )}
+
               {/* Checkbox */}
               <input
                 type="checkbox"

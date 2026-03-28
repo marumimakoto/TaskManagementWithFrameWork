@@ -586,6 +586,7 @@
 /* ===== Card ===== */
 
 .card {
+  position: relative;
   border-radius: 12px;
   padding: 10px 12px;
   display: grid;
@@ -593,6 +594,7 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  overflow: hidden;
   transition: all 0.2s ease;
 }
 
