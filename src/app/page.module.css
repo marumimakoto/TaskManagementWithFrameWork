@@ -1143,6 +1143,8 @@
 
 .diaryPanel {
   max-width: 100%;
+  overflow-x: hidden;
+  word-break: break-word;
 }
 
 .diaryForm {
