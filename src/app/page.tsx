@@ -2008,7 +2008,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               className={`${styles.menuItem} ${activeTab === 'tasks' ? styles.menuItemActive : ''}`}
               onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }}
             >
-              タスク
+              ホーム
             </button>
             <button
               type="button"
@@ -2039,6 +2039,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   onClick={() => { setActiveTab('recurring'); setMenuOpen(false); }}
                 >
                   繰り返しタスク
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.menuSubItem} ${activeTab === 'bucket-list' ? styles.menuItemActive : ''}`}
+                  onClick={() => { setActiveTab('bucket-list'); setMenuOpen(false); }}
+                >
+                  やりたいことリスト
                 </button>
                 <button
                   type="button"
@@ -2117,13 +2124,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               onClick={() => { setActiveTab('help'); setMenuOpen(false); }}
             >
               ヘルプ
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'bucket-list' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('bucket-list'); setMenuOpen(false); }}
-            >
-              やりたいことリスト
             </button>
             <button
               type="button"
