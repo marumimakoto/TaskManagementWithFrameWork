@@ -145,29 +145,8 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
 
   const now: number = Date.now();
 
-  // 1. 完了タスクをアーカイブに移動して削除
-  const doneTodos: TodoRow[] = await db.all<TodoRow>(
-    'SELECT * FROM todos WHERE user_id = ? AND done = 1', userId
-  );
-
-  for (const t of doneTodos) {
-    await db.run(
-      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now
-    );
-    await db.run('DELETE FROM todos WHERE id = ?', t.id);
-  }
-
-  // アーカイブを100件に制限
-  await db.run(`
-    DELETE FROM archived_todos WHERE id IN (
-      SELECT id FROM archived_todos WHERE user_id = ?
-      ORDER BY archived_at DESC
-      LIMIT -1 OFFSET 100
-    )
-  `, userId);
-
-  // 2. 繰り返しルールに基づく自動追加（タスクを削除してもルールが生きていれば生成する）
+  // 1. 繰り返しルールに基づく自動追加（完了タスク削除の前に実行する）
+  // 理由: 繰り返しタスクを完了→日次処理の場合、先に新タスクを生成してから完了分を削除する
   interface RuleRow {
     id: string;
     user_id: string;
@@ -182,7 +161,7 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     'SELECT * FROM recurring_rules WHERE user_id = ? AND enabled = 1', userId
   );
 
-  // 既存の未完了タスクのタイトルセット
+  // 既存の未完了タスクのタイトルセット（完了タスクは含めない）
   const existingTitleRows = await db.all<{ title: string }>('SELECT title FROM todos WHERE user_id = ? AND done = 0', userId);
   const existingTitles: Set<string> = new Set(
     existingTitleRows.map((r: { title: string }) => r.title)
@@ -214,6 +193,28 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     existingTitles.add(rule.title);
     addedCount++;
   }
+
+  // 2. 完了タスクをアーカイブに移動して削除（繰り返し生成の後に実行）
+  const doneTodos: TodoRow[] = await db.all<TodoRow>(
+    'SELECT * FROM todos WHERE user_id = ? AND done = 1', userId
+  );
+
+  for (const t of doneTodos) {
+    await db.run(
+      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now
+    );
+    await db.run('DELETE FROM todos WHERE id = ?', t.id);
+  }
+
+  // アーカイブを100件に制限
+  await db.run(`
+    DELETE FROM archived_todos WHERE id IN (
+      SELECT id FROM archived_todos WHERE user_id = ?
+      ORDER BY archived_at DESC
+      LIMIT -1 OFFSET 100
+    )
+  `, userId);
 
   // 3. last_refresh_dateを更新
   await db.run('UPDATE users SET last_refresh_date = ? WHERE id = ?', today, userId);
