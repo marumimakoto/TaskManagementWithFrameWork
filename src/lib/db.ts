@@ -235,6 +235,13 @@ async function initializeTables(c: Client): Promise<void> {
       enabled INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,
+    `CREATE TABLE IF NOT EXISTS bucket_categories (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    )`,
     `CREATE TABLE IF NOT EXISTS bucket_list (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,

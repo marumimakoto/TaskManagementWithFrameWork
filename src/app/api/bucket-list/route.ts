@@ -29,7 +29,30 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       createdAt: row.created_at,
     }));
 
-    return NextResponse.json(items);
+    // カテゴリ一覧を取得（なければデフォルトを作成）
+    let categories = await db.all(
+      'SELECT * FROM bucket_categories WHERE user_id = ? ORDER BY sort_order ASC',
+      userId,
+    );
+    if (categories.length === 0) {
+      const defaults: string[] = ['仕事', '私生活', '趣味', '健康', '学び', 'お金', '旅行', 'その他'];
+      for (let i = 0; i < defaults.length; i++) {
+        await db.run(
+          'INSERT INTO bucket_categories (id, user_id, name, sort_order) VALUES (?, ?, ?, ?)',
+          crypto.randomUUID(), userId, defaults[i], i,
+        );
+      }
+      categories = await db.all(
+        'SELECT * FROM bucket_categories WHERE user_id = ? ORDER BY sort_order ASC',
+        userId,
+      );
+    }
+    const categoryList = categories.map((row: Record<string, unknown>) => ({
+      id: row.id,
+      name: row.name,
+    }));
+
+    return NextResponse.json({ items, categories: categoryList });
   } catch (e: unknown) {
     const message: string = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -37,11 +60,29 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * やりたいことリストに新しい項目を追加する
+ * やりたいことリストに新しい項目またはカテゴリを追加する
+ * type='category' の場合はカテゴリ追加
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const body = await request.json();
+
+    // カテゴリ追加
+    if (body.type === 'category') {
+      const { userId, name } = body;
+      if (!userId || !name?.trim()) {
+        return NextResponse.json({ error: 'userId and name required' }, { status: 400 });
+      }
+      const db = await getDb();
+      const catId: string = crypto.randomUUID();
+      await db.run(
+        'INSERT INTO bucket_categories (id, user_id, name) VALUES (?, ?, ?)',
+        catId, userId, name.trim(),
+      );
+      return NextResponse.json({ id: catId, name: name.trim() });
+    }
+
+    // アイテム追加
     const { userId, title, detail, category, deadlineYear } = body;
 
     if (!userId || !title?.trim()) {
@@ -124,17 +165,31 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
- * やりたいことリストの項目を削除する
+ * やりたいことリストの項目またはカテゴリを削除する
+ * type='category' の場合はカテゴリ削除（該当アイテムは「未分類」に変更）
  */
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
-    const { id } = await request.json();
+    const body = await request.json();
+    const { id, type } = body;
     if (!id) {
       return NextResponse.json({ error: 'id required' }, { status: 400 });
     }
 
     const db = await getDb();
-    await db.run('DELETE FROM bucket_list WHERE id = ?', id);
+
+    if (type === 'category') {
+      // カテゴリ名を取得
+      const cat = await db.get('SELECT name FROM bucket_categories WHERE id = ?', id);
+      if (cat) {
+        const catName: string = cat.name as string;
+        // このカテゴリのアイテムを「未分類」に変更
+        await db.run('UPDATE bucket_list SET category = ? WHERE category = ?', '未分類', catName);
+      }
+      await db.run('DELETE FROM bucket_categories WHERE id = ?', id);
+    } else {
+      await db.run('DELETE FROM bucket_list WHERE id = ?', id);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (e: unknown) {
