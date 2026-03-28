@@ -2826,6 +2826,12 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     onChange={(e) =>
                       setActualInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
                     }
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !t.done) {
+                        e.preventDefault();
+                        addLog(t.id);
+                      }
+                    }}
                     className={styles.inputNarrow}
                     disabled={t.done}
                   />
