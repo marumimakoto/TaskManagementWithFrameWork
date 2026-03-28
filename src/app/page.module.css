@@ -2615,6 +2615,10 @@
 
   .taskTitle {
     font-size: 16px !important;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+    word-break: break-word;
   }
 
   .taskDeadlineBig {

@@ -2610,7 +2610,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   setDropBetweenIndex(null);
                 }}
               />
-            <div className={`${styles.cardRow} ${depth > 0 ? styles.cardRowNested : ''}`} style={depth > 0 ? { marginLeft: depth * 16 } : {}}>
+            <div className={`${styles.cardRow} ${depth > 0 ? styles.cardRowNested : ''}`} style={depth > 0 ? { marginLeft: depth * (isMobile ? 8 : 16) } : {}}>
               {/* 左ドロップゾーン（常にDOMに存在、ドラッグ中かつ子タスクのみ表示） */}
               <div
                 className={`${styles.unparentDropZone} ${dragOverId === ('unparent-' + t.id) ? styles.unparentDropZoneActive : ''}`}
