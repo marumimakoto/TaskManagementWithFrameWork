@@ -2714,43 +2714,47 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 setDropBetweenIndex(null);
               }}
             >
-              {/* ドラッグハンドル */}
-              <DragHandle
-                onDragStart={(e) => {
-                  isDraggingRef.current = true;
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', t.id);
-                  requestAnimationFrame(() => {
-                    setDragId(t.id);
-                  });
-                }}
-                onDragEnd={() => {
-                  isDraggingRef.current = false;
-                  setDragId(null);
-                  setDragOverId(null);
-                  setDragOverMode(null);
-                  setDropBetweenIndex(null);
-                }}
-              />
-              {/* 階層化ボタン（常時表示） */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginRight: 2 }}>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  style={{ fontSize: '15px', padding: '2px 6px', lineHeight: 1, minHeight: 'auto', minWidth: 'auto', opacity: 0.7 }}
-                  title="すぐ上のタスクの子にする"
-                  onClick={(e) => { e.stopPropagation(); moveRight(t.id); }}
-                >▶</button>
-                {t.parentId && (
+              {/* ドラッグハンドル（PC時のみ） */}
+              {!isMobile && (
+                <DragHandle
+                  onDragStart={(e) => {
+                    isDraggingRef.current = true;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.dataTransfer.setData('text/plain', t.id);
+                    requestAnimationFrame(() => {
+                      setDragId(t.id);
+                    });
+                  }}
+                  onDragEnd={() => {
+                    isDraggingRef.current = false;
+                    setDragId(null);
+                    setDragOverId(null);
+                    setDragOverMode(null);
+                    setDropBetweenIndex(null);
+                  }}
+                />
+              )}
+              {/* 階層化ボタン（PC時のみ常時表示） */}
+              {!isMobile && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, marginRight: 2 }}>
                   <button
                     type="button"
                     className={styles.iconBtn}
                     style={{ fontSize: '15px', padding: '2px 6px', lineHeight: 1, minHeight: 'auto', minWidth: 'auto', opacity: 0.7 }}
-                    title="階層を1つ上げる"
-                    onClick={(e) => { e.stopPropagation(); moveLeft(t.id); }}
-                  >◀</button>
-                )}
-              </div>
+                    title="すぐ上のタスクの子にする"
+                    onClick={(e) => { e.stopPropagation(); moveRight(t.id); }}
+                  >▶</button>
+                  {t.parentId && (
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      style={{ fontSize: '15px', padding: '2px 6px', lineHeight: 1, minHeight: 'auto', minWidth: 'auto', opacity: 0.7 }}
+                      title="階層を1つ上げる"
+                      onClick={(e) => { e.stopPropagation(); moveLeft(t.id); }}
+                    >◀</button>
+                  )}
+                </div>
+              )}
               {/* Checkbox */}
               <input
                 type="checkbox"
