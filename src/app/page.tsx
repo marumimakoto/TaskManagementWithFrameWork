@@ -778,12 +778,28 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   async function changeParent(childId: string, newParentId: string | null): Promise<void> {
     // 自分自身を親にはできない
     if (childId === newParentId) {
+      showUndoToast({
+        toastId: 'alert-' + Date.now(),
+        todoId: childId,
+        message: '自分自身を親にすることはできません',
+        undoLabel: '',
+        undo: () => {},
+      });
       return;
     }
     // 循環参照チェック：newParentIdがchildIdの子孫であればキャンセル
     if (newParentId) {
       const descendants: string[] = getDescendantIds(childId, todos);
       if (descendants.includes(newParentId)) {
+        const parentTodo: Todo | undefined = todos.find((t) => t.id === newParentId);
+        const childTodo: Todo | undefined = todos.find((t) => t.id === childId);
+        showUndoToast({
+          toastId: 'alert-' + Date.now(),
+          todoId: childId,
+          message: `「${childTodo?.title ?? ''}」の子タスクを親にすることはできません（循環参照）`,
+          undoLabel: '',
+          undo: () => {},
+        });
         return;
       }
     }
@@ -3065,9 +3081,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         {undoToasts.map((t) => (
           <div key={t.toastId} className={styles.toast}>
             <div className={styles.toastMessage}>{t.message}</div>
-            <button onClick={t.undo} className={styles.iconBtn}>
-              {t.undoLabel ?? '取り消す'}
-            </button>
+            {t.undoLabel !== '' && (
+              <button onClick={t.undo} className={styles.iconBtn}>
+                {t.undoLabel ?? '取り消す'}
+              </button>
+            )}
           </div>
         ))}
       </div>
