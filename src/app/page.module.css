@@ -2688,6 +2688,20 @@
     gap: 6px;
   }
 
+  .diaryFilterRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .diaryFilterRow > div:nth-child(3) {
+    grid-column: 1 / -1;
+  }
+
+  .diarySearchField {
+    min-width: 0;
+  }
+
   /* モード切替バー */
   .diaryModeBar {
     font-size: 13px;
