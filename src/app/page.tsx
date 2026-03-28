@@ -2847,8 +2847,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   // 前後のタスクのsortOrderの中間値を計算
                   const isBefore: boolean = dropBetweenIndex === idx;
                   const targetIdx: number = isBefore ? idx : idx + 1;
-                  const prevItem: { todo: Todo } | undefined = treeList[targetIdx - 1];
-                  const nextItem: { todo: Todo } | undefined = treeList[targetIdx];
+                  const prevItem: { todo: Todo } | undefined = filteredTreeList[targetIdx - 1];
+                  const nextItem: { todo: Todo } | undefined = filteredTreeList[targetIdx];
                   let newOrder: number;
                   if (prevItem && nextItem) {
                     newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
