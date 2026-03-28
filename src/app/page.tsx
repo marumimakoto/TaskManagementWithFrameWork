@@ -592,6 +592,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
         // タスク
         const fetchedTodos: Todo[] = data.todos;
+        // 孤立子タスク（親が削除されたもの）のparentIdをクリーンアップ
+        const todoIds: Set<string> = new Set(fetchedTodos.map((t) => t.id));
+        for (const t of fetchedTodos) {
+          if (t.parentId && !todoIds.has(t.parentId)) {
+            t.parentId = undefined;
+            // DBも更新（バックグラウンド）
+            fetch('/api/todos/' + t.id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: { parentId: null } }),
+            });
+          }
+        }
+
         const orders: number[] = fetchedTodos.map((t) => t.sortOrder);
         const hasDuplicates: boolean = new Set(orders).size < orders.length;
         if (hasDuplicates && fetchedTodos.length > 0) {
@@ -721,10 +735,24 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [swipeAction, setSwipeAction] = useState<Record<string, 'nest' | 'unnest' | null>>({});
 
   const sorted: Todo[] = useMemo((): Todo[] => {
-    // ルートタスク（parentIdなし）の完了を下に移動するシンプルなソート
+    // 実際に存在するタスクIDのセット（孤立子タスク判定用）
+    const allIds: Set<string> = new Set(todos.map((t) => t.id));
+
+    // ルートタスク = parentIdなし、または親が存在しない（孤立子タスク）
+    function isEffectiveRoot(t: Todo): boolean {
+      if (!t.parentId) {
+        return true;
+      }
+      // parentIdが設定されていても、親が存在しなければルート扱い
+      if (!allIds.has(t.parentId)) {
+        return true;
+      }
+      return false;
+    }
+
     const s: Todo[] = [...todos].sort((a: Todo, b: Todo): number => {
-      const aIsRoot: boolean = !a.parentId;
-      const bIsRoot: boolean = !b.parentId;
+      const aIsRoot: boolean = isEffectiveRoot(a);
+      const bIsRoot: boolean = isEffectiveRoot(b);
 
       // ルートタスク同士: 完了を下に
       if (aIsRoot && bIsRoot) {
