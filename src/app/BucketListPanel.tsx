@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
+import { useIsMobile } from './useIsMobile';
 import styles from './page.module.css';
 
 /** やりたいことリストの1項目 */
@@ -25,9 +26,11 @@ type BucketCategory = {
  * 人生のやりたいことリストパネル
  */
 export default function BucketListPanel({ user }: { user: AppUser }): React.ReactElement {
+  const isMobile: boolean = useIsMobile();
   const [items, setItems] = useState<BucketItem[]>([]);
   const [categories, setCategories] = useState<BucketCategory[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
+  const [showMobileForm, setShowMobileForm] = useState<boolean>(false);
 
   // 追加フォーム
   const [newTitle, setNewTitle] = useState<string>('');
@@ -97,7 +100,8 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
     }, ...prev]);
     setNewTitle('');
     setNewDetail('');
-    setNewDeadlineYear('');
+    setNewDeadlineYear(defaultYear);
+    setShowMobileForm(false);
   }
 
   /** カテゴリ追加 */
@@ -233,110 +237,131 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
         </div>
       </div>
 
-      {/* 追加フォーム */}
-      <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
-        <div style={{ display: 'grid', gap: 8 }}>
-          <input
-            placeholder="やりたいこと"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            className={styles.input}
-            onKeyDown={(e) => { if (e.key === 'Enter') { addItem(); } }}
-          />
-          <textarea
-            placeholder="詳細（任意）"
-            value={newDetail}
-            onChange={(e) => setNewDetail(e.target.value)}
-            className={styles.input}
-            rows={2}
-            style={{ resize: 'vertical' }}
-          />
-
-          {/* カテゴリ選択（ボタン式） */}
-          <div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>カテゴリ</span>
-              <button
-                onClick={() => setShowCategoryManager(!showCategoryManager)}
-                style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
-              >
-                {showCategoryManager ? '閉じる' : '管理'}
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {categoryNames.map((name) => (
+      {/* 追加フォーム（共通部品） */}
+      {(() => {
+        const formContent = (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <input
+              placeholder="やりたいこと"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className={styles.input}
+              onKeyDown={(e) => { if (e.key === 'Enter') { addItem(); } }}
+            />
+            <textarea
+              placeholder="詳細（任意）"
+              value={newDetail}
+              onChange={(e) => setNewDetail(e.target.value)}
+              className={styles.input}
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>カテゴリ</span>
                 <button
-                  key={name}
-                  onClick={() => setNewCategory(name)}
-                  style={{
-                    padding: '4px 12px',
-                    borderRadius: 999,
-                    border: newCategory === name ? '2px solid #3b82f6' : '1px solid var(--card-border)',
-                    background: newCategory === name ? '#dbeafe' : 'var(--card-bg)',
-                    color: newCategory === name ? '#1d4ed8' : 'var(--foreground)',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    fontWeight: newCategory === name ? 600 : 400,
-                  }}
+                  onClick={() => setShowCategoryManager(!showCategoryManager)}
+                  style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
-                  {name}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* カテゴリ管理 */}
-          {showCategoryManager && (
-            <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--card-border)' }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <input
-                  placeholder="新しいカテゴリ名"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  className={styles.input}
-                  style={{ flex: 1 }}
-                  onKeyDown={(e) => { if (e.key === 'Enter') { addCategory(); } }}
-                />
-                <button onClick={addCategory} className={styles.primaryBtn} style={{ padding: '6px 12px', fontSize: 13 }}>
-                  追加
+                  {showCategoryManager ? '閉じる' : '管理'}
                 </button>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {categories.map((cat) => (
-                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#e2e8f0', fontSize: 13 }}>
-                    <span>{cat.name}</span>
-                    <button
-                      onClick={() => deleteCategory(cat.id, cat.name)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1 }}
-                    >
-                      ×
-                    </button>
-                  </div>
+                {categoryNames.map((name) => (
+                  <button
+                    key={name}
+                    onClick={() => setNewCategory(name)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 999,
+                      border: newCategory === name ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                      background: newCategory === name ? '#dbeafe' : 'var(--card-bg)',
+                      color: newCategory === name ? '#1d4ed8' : 'var(--foreground)',
+                      cursor: 'pointer', fontSize: 13, fontWeight: newCategory === name ? 600 : 400,
+                    }}
+                  >
+                    {name}
+                  </button>
                 ))}
               </div>
             </div>
-          )}
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <div>
-              <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>目標年</div>
-              <select
-                value={newDeadlineYear}
-                onChange={(e) => setNewDeadlineYear(e.target.value)}
-                className={styles.input}
-              >
-                <option value="">指定しない</option>
-                {Array.from({ length: 31 }, (_, i) => currentYear + i).map((year) => (
-                  <option key={year} value={String(year)}>{year}年</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-              <button onClick={addItem} className={styles.primaryBtn} style={{ width: '100%' }}>追加</button>
+            {showCategoryManager && (
+              <div style={{ padding: 12, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--card-border)' }}>
+                <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                  <input
+                    placeholder="新しいカテゴリ名"
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className={styles.input}
+                    style={{ flex: 1 }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { addCategory(); } }}
+                  />
+                  <button onClick={addCategory} className={styles.primaryBtn} style={{ padding: '6px 12px', fontSize: 13 }}>
+                    追加
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {categories.map((cat) => (
+                    <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#e2e8f0', fontSize: 13 }}>
+                      <span>{cat.name}</span>
+                      <button
+                        onClick={() => deleteCategory(cat.id, cat.name)}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1 }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>目標年</div>
+                <select
+                  value={newDeadlineYear}
+                  onChange={(e) => setNewDeadlineYear(e.target.value)}
+                  className={styles.input}
+                >
+                  <option value="">指定しない</option>
+                  {Array.from({ length: 31 }, (_, i) => currentYear + i).map((year) => (
+                    <option key={year} value={String(year)}>{year}年</option>
+                  ))}
+                </select>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <button onClick={addItem} className={styles.primaryBtn} style={{ width: '100%' }}>追加</button>
+              </div>
             </div>
           </div>
-        </div>
-      </div>
+        );
+
+        if (isMobile) {
+          return (
+            <>
+              {showMobileForm && (
+                <div
+                  style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 9000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+                  onClick={(e) => { if (e.target === e.currentTarget) { setShowMobileForm(false); } }}
+                >
+                  <div style={{ background: 'var(--card-bg)', borderRadius: 16, padding: 20, width: '100%', maxWidth: 480, maxHeight: '80vh', overflowY: 'auto' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <span style={{ fontWeight: 700, fontSize: 16 }}>やりたいことを追加</span>
+                      <button onClick={() => setShowMobileForm(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>×</button>
+                    </div>
+                    {formContent}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        }
+
+        return (
+          <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
+            {formContent}
+          </div>
+        );
+      })()}
 
       {/* フィルター（カテゴリボタン式 + ステータス） */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -470,6 +495,34 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
           </div>
         ))}
       </div>
+
+      {/* スマホ用＋ボタン */}
+      {isMobile && (
+        <button
+          onClick={() => setShowMobileForm(true)}
+          style={{
+            position: 'fixed',
+            bottom: 80,
+            right: 20,
+            width: 56,
+            height: 56,
+            borderRadius: '50%',
+            background: '#3b82f6',
+            color: 'white',
+            border: 'none',
+            fontSize: 28,
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 4px 12px rgba(59,130,246,0.4)',
+            zIndex: 8000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          +
+        </button>
+      )}
     </div>
   );
 }
