@@ -23,6 +23,7 @@ import MyPage from './MyPage';
 import SettingsPanel from './SettingsPanel';
 import TaskSetPanel from './TaskSetPanel';
 import ButlerAvatar from './ButlerAvatar';
+import BucketListPanel from './BucketListPanel';
 import PomodoroTimer from './PomodoroTimer';
 import MatrixPanel from './MatrixPanel';
 import ActivityPanel from './ActivityPanel';
@@ -329,7 +330,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  const [activeTab, setActiveTab] = useState<'tasks' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
@@ -2119,6 +2120,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             </button>
             <button
               type="button"
+              className={`${styles.menuItem} ${activeTab === 'bucket-list' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('bucket-list'); setMenuOpen(false); }}
+            >
+              やりたいことリスト
+            </button>
+            <button
+              type="button"
               className={`${styles.menuItem} ${activeTab === 'bug-report' ? styles.menuItemActive : ''}`}
               onClick={() => { setActiveTab('bug-report'); setMenuOpen(false); }}
             >
@@ -3290,6 +3298,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {activeTab === 'bug-report' && (
         <BugReportPanel user={user} />
+      )}
+
+      {activeTab === 'bucket-list' && (
+        <BucketListPanel user={user} />
       )}
 
       {activeTab === 'admin' && (
