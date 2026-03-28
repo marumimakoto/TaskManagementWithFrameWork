@@ -1977,7 +1977,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
       <header className={styles.topBar}>
         <h1 className={styles.headerTitle}>
-          {activeTab === 'tasks' ? 'タスク' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
+          {activeTab === 'tasks' ? 'タスク' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
         </h1>
         <div className={styles.userBar}>
           <span className={styles.userName}>{user.name}</span>
