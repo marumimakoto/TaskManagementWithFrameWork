@@ -1025,12 +1025,19 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
    * @param allTodos - 全タスク配列
    * @returns 子孫タスクのID配列
    */
-  function getDescendantIds(parentId: string, allTodos: Todo[]): string[] {
+  function getDescendantIds(parentId: string, allTodos: Todo[], visited?: Set<string>): string[] {
+    const seen: Set<string> = visited ?? new Set();
+    if (seen.has(parentId)) {
+      return [];
+    }
+    seen.add(parentId);
     const children: Todo[] = allTodos.filter((t) => t.parentId === parentId);
     const ids: string[] = [];
     for (const child of children) {
-      ids.push(child.id);
-      ids.push(...getDescendantIds(child.id, allTodos));
+      if (!seen.has(child.id)) {
+        ids.push(child.id);
+        ids.push(...getDescendantIds(child.id, allTodos, seen));
+      }
     }
     return ids;
   }
