@@ -674,11 +674,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [deadlineText, setDeadlineText] = useState('');
 
   // 表示モード
-  const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid'>('detail');
+  const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid' | 'kanban'>('detail');
 
-  // スマホではグリッドモードを使えないようにする
+  // スマホではグリッド・カンバンモードを使えないようにする
   useEffect(() => {
-    if (isMobile && viewMode === 'grid') {
+    if (isMobile && (viewMode === 'grid' || viewMode === 'kanban')) {
       setViewMode('detail');
     }
   }, [isMobile, viewMode]);
@@ -2590,6 +2590,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               ⊞
             </button>
           )}
+          {!isMobile && (
+            <button
+              type="button"
+              className={`${styles.viewModeBtn} ${viewMode === 'kanban' ? styles.viewModeBtnActive : ''}`}
+              onClick={() => { setViewMode('kanban'); }}
+              title="カンバン表示"
+            >
+              ☰☰
+            </button>
+          )}
         </div>
       </div>
 
@@ -3313,6 +3323,67 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           })}
         </section>
       )}
+
+      {/* カンバン表示 */}
+      {viewMode === 'kanban' && (() => {
+        const notStarted: Todo[] = todos.filter((t) => !t.done && !t.started);
+        const inProgress: Todo[] = todos.filter((t) => !t.done && t.started);
+        const doneTasks: Todo[] = todos.filter((t) => t.done);
+
+        function renderKanbanCard(t: Todo): React.ReactElement {
+          const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+          return (
+            <div
+              key={t.id}
+              className={`${styles.kanbanCard} ${styles[bgClass]}`}
+              onClick={() => toggleExpand(t.id)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={t.done}
+                  onChange={() => toggleDone(t.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className={styles.checkbox}
+                />
+                <span style={{ fontWeight: 600, flex: 1, textDecoration: t.done ? 'line-through' : 'none', opacity: t.done ? 0.6 : 1 }}>
+                  {t.title}
+                </span>
+              </div>
+              {t.deadline && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, paddingLeft: 30 }}>
+                  期限: {formatDeadline(t.deadline)}
+                </div>
+              )}
+              {expandedId === t.id && renderExpandedContent(t)}
+            </div>
+          );
+        }
+
+        return (
+          <div className={styles.kanbanBoard}>
+            <div className={styles.kanbanColumn}>
+              <div className={styles.kanbanColumnTitle} style={{ background: '#fef2f2', color: '#dc2626', borderBottom: '3px solid #ef4444' }}>
+                未着手 ({notStarted.length})
+              </div>
+              {notStarted.map(renderKanbanCard)}
+            </div>
+            <div className={styles.kanbanColumn}>
+              <div className={styles.kanbanColumnTitle} style={{ background: '#eff6ff', color: '#2563eb', borderBottom: '3px solid #3b82f6' }}>
+                進行中 ({inProgress.length})
+              </div>
+              {inProgress.map(renderKanbanCard)}
+            </div>
+            <div className={styles.kanbanColumn}>
+              <div className={styles.kanbanColumnTitle} style={{ background: '#f0fdf4', color: '#16a34a', borderBottom: '3px solid #22c55e' }}>
+                完了 ({doneTasks.length})
+              </div>
+              {doneTasks.map(renderKanbanCard)}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Undo toasts */}
       <div className={styles.toastContainer}>

@@ -507,6 +507,39 @@
   max-width: 100%;
 }
 
+/* ===== カンバン ===== */
+
+.kanbanBoard {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  max-width: 100%;
+  min-height: 400px;
+}
+
+.kanbanColumn {
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.kanbanColumnTitle {
+  padding: 10px 14px;
+  font-weight: 700;
+  font-size: 14px;
+  text-align: center;
+}
+
+.kanbanCard {
+  margin: 6px 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--card-border);
+}
+
 .compactCard {
   display: flex;
   align-items: center;
