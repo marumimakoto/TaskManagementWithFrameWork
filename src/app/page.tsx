@@ -16,24 +16,28 @@ import {
   clearSession,
 } from './utils';
 import styles from './page.module.css';
-import DiaryWritePanel from './DiaryWritePanel';
-import DiaryViewPanel from './DiaryViewPanel';
-import PublicDiaryPanel from './PublicDiaryPanel';
-import MyPage from './MyPage';
-import SettingsPanel from './SettingsPanel';
-import TaskSetPanel from './TaskSetPanel';
+import dynamic from 'next/dynamic';
 import ButlerAvatar from './ButlerAvatar';
-import BucketListPanel from './BucketListPanel';
 import PomodoroTimer from './PomodoroTimer';
-import MatrixPanel from './MatrixPanel';
-import ActivityPanel from './ActivityPanel';
-import ArchivedTodosPanel from './ArchivedTodosPanel';
-import RecurringPanel from './RecurringPanel';
 import { DragHandle, MoveButtonBar, DeleteButton } from './SharedComponents';
-import HelpPanel, { TUTORIAL_STEPS } from './HelpPanel';
-import BugReportPanel from './BugReportPanel';
-import AdminPanel from './AdminPanel';
+import { TUTORIAL_STEPS } from './HelpPanel';
 import { useIsMobile } from './useIsMobile';
+
+// 遅延読み込み: タブ切替時に初めてロードされる
+const DiaryWritePanel = dynamic(() => import('./DiaryWritePanel'));
+const DiaryViewPanel = dynamic(() => import('./DiaryViewPanel'));
+const PublicDiaryPanel = dynamic(() => import('./PublicDiaryPanel'));
+const MyPage = dynamic(() => import('./MyPage'));
+const SettingsPanel = dynamic(() => import('./SettingsPanel'));
+const TaskSetPanel = dynamic(() => import('./TaskSetPanel'));
+const BucketListPanel = dynamic(() => import('./BucketListPanel'));
+const MatrixPanel = dynamic(() => import('./MatrixPanel'));
+const ActivityPanel = dynamic(() => import('./ActivityPanel'));
+const ArchivedTodosPanel = dynamic(() => import('./ArchivedTodosPanel'));
+const RecurringPanel = dynamic(() => import('./RecurringPanel'));
+const HelpPanel = dynamic(() => import('./HelpPanel'));
+const BugReportPanel = dynamic(() => import('./BugReportPanel'));
+const AdminPanel = dynamic(() => import('./AdminPanel'));
 
 /**
  * ページのルートコンポーネント
@@ -479,9 +483,33 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       }, 2000);
     }
   }
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_SETTINGS);
-  const [todos, setTodos] = useState<Todo[]>([]);
-  const [loading, setLoading] = useState(true);
+  // localStorageキャッシュから初期値を復元（即表示用）
+  const [settings, setSettings] = useState<UserSettings>(() => {
+    try {
+      const cached: string | null = localStorage.getItem('kiroku:settings:' + user.id);
+      if (cached) {
+        return JSON.parse(cached) as UserSettings;
+      }
+    } catch { /* ignore */ }
+    return DEFAULT_SETTINGS;
+  });
+  const [todos, setTodos] = useState<Todo[]>(() => {
+    try {
+      const cached: string | null = localStorage.getItem('kiroku:todos:' + user.id);
+      if (cached) {
+        return JSON.parse(cached) as Todo[];
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [loading, setLoading] = useState(() => {
+    // キャッシュがあれば初期ローディングをスキップ
+    try {
+      return !localStorage.getItem('kiroku:todos:' + user.id);
+    } catch {
+      return true;
+    }
+  });
   const [undoToasts, setUndoToasts] = useState<UndoToast[]>([]);
   const deleteOnceRef = useRef<Record<string, number>>({});
 
@@ -528,6 +556,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         setTodos(data);
       }
       log('fetch:ok', { count: data.length });
+      // キャッシュを更新
+      try {
+        localStorage.setItem('kiroku:todos:' + user.id, JSON.stringify(data));
+      } catch { /* ignore */ }
     } catch (e) {
       console.warn('Failed to fetch todos', e);
     } finally {
@@ -535,9 +567,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     }
   }, [user.id]);
 
+  /** 初回表示: 日次リフレッシュ → 一括データ取得（todos + settings + isPro） */
   useEffect(() => {
-    /** 初回表示時に日次リフレッシュを実行してからタスクを取得する */
-    async function initTodos(): Promise<void> {
+    async function initAll(): Promise<void> {
+      // 日次リフレッシュ（完了タスク削除・繰り返しタスク生成）
       try {
         const refreshRes: Response = await fetch('/api/todos/refresh', {
           method: 'POST',
@@ -551,17 +584,47 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       } catch (e) {
         console.warn('Failed to refresh todos', e);
       }
-      fetchTodos();
-    }
-    initTodos();
-  }, [fetchTodos, user.id]);
 
-  /** APIからユーザーの表示設定を取得する */
-  useEffect(() => {
-    fetch('/api/settings?userId=' + user.id)
-      .then((res) => res.json())
-      .then((data: UserSettings) => setSettings(data))
-      .catch(() => {});
+      // 一括取得（3回のAPI呼び出しを1回に統合）
+      try {
+        const res: Response = await fetch('/api/init?userId=' + user.id);
+        const data: { todos: Todo[]; settings: UserSettings | null; isPro: boolean } = await res.json();
+
+        // タスク
+        const fetchedTodos: Todo[] = data.todos;
+        const orders: number[] = fetchedTodos.map((t) => t.sortOrder);
+        const hasDuplicates: boolean = new Set(orders).size < orders.length;
+        if (hasDuplicates && fetchedTodos.length > 0) {
+          const initialized: Todo[] = fetchedTodos.map((t, i) => ({ ...t, sortOrder: i * 10 }));
+          setTodos(initialized);
+          for (const t of initialized) {
+            fetch('/api/todos/' + t.id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: { sortOrder: t.sortOrder } }),
+            });
+          }
+        } else {
+          setTodos(fetchedTodos);
+        }
+        try { localStorage.setItem('kiroku:todos:' + user.id, JSON.stringify(fetchedTodos)); } catch { /* ignore */ }
+
+        // 設定
+        if (data.settings) {
+          setSettings(data.settings);
+          try { localStorage.setItem('kiroku:settings:' + user.id, JSON.stringify(data.settings)); } catch { /* ignore */ }
+        }
+
+        // プロ版
+        setIsPro(data.isPro);
+      } catch (e) {
+        console.warn('Failed to init', e);
+        // フォールバック: 個別取得
+        fetchTodos();
+      }
+      setLoading(false);
+    }
+    initAll();
   }, [user.id]);
 
   /** 設定をCSS変数としてdocumentに適用する */
