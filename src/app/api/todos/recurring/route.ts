@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/db';
 
 /**
- * 繰り返し設定があるタスク一覧を取得する
+ * 繰り返しルール一覧を取得する
+ * todosテーブルではなくrecurring_rulesテーブルから取得する
+ * タスクが削除されてもルールは残る
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const userId: string | null = request.nextUrl.searchParams.get('userId');
@@ -13,9 +15,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const db = await getDb();
   const rows = await db.all<{
     id: string; title: string; est_min: number; recurrence: string; detail: string;
-    deadline: number | null; done: number; created_at: number;
+    deadline_offset_days: number | null; enabled: number; created_at: number;
   }>(
-    "SELECT id, title, est_min, recurrence, detail, deadline, done, created_at FROM todos WHERE user_id = ? AND recurrence != 'carry' AND recurrence != '' ORDER BY created_at DESC", userId
+    'SELECT id, title, est_min, recurrence, detail, deadline_offset_days, enabled, created_at FROM recurring_rules WHERE user_id = ? AND enabled = 1 ORDER BY created_at DESC', userId
   );
 
   const result = rows.map((row) => ({
@@ -24,10 +26,80 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     estMin: row.est_min,
     recurrence: row.recurrence,
     detail: row.detail || undefined,
-    deadline: row.deadline ?? undefined,
-    done: row.done === 1,
+    deadlineOffsetDays: row.deadline_offset_days,
     createdAt: row.created_at,
   }));
 
   return NextResponse.json(result);
+}
+
+/**
+ * 繰り返しルールを無効化する
+ */
+export async function DELETE(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    const { id } = body;
+    if (!id) {
+      return NextResponse.json({ error: 'id required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    await db.run('UPDATE recurring_rules SET enabled = 0 WHERE id = ?', id);
+
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const message: string = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+/**
+ * 繰り返しルールを更新する
+ */
+export async function PUT(request: NextRequest): Promise<NextResponse> {
+  try {
+    const body = await request.json();
+    const { id, updates } = body;
+    if (!id || !updates) {
+      return NextResponse.json({ error: 'id and updates required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    const fields: string[] = [];
+    const values: unknown[] = [];
+
+    if (updates.title !== undefined) {
+      fields.push('title = ?');
+      values.push(updates.title);
+    }
+    if (updates.estMin !== undefined) {
+      fields.push('est_min = ?');
+      values.push(updates.estMin);
+    }
+    if (updates.recurrence !== undefined) {
+      fields.push('recurrence = ?');
+      values.push(updates.recurrence);
+    }
+    if (updates.detail !== undefined) {
+      fields.push('detail = ?');
+      values.push(updates.detail);
+    }
+    if (updates.deadlineOffsetDays !== undefined) {
+      fields.push('deadline_offset_days = ?');
+      values.push(updates.deadlineOffsetDays);
+    }
+
+    if (fields.length === 0) {
+      return NextResponse.json({ error: 'no fields' }, { status: 400 });
+    }
+
+    values.push(id);
+    await db.run(`UPDATE recurring_rules SET ${fields.join(', ')} WHERE id = ?`, ...values);
+
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const message: string = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 }
