@@ -721,15 +721,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   const sorted: Todo[] = useMemo((): Todo[] => {
     // ルートタスク（parentIdなし）の完了を下に移動するシンプルなソート
-    // 子タスクはsortOrder順のまま（treeListで親の下に配置される）
     const s: Todo[] = [...todos].sort((a: Todo, b: Todo): number => {
       const aIsRoot: boolean = !a.parentId;
       const bIsRoot: boolean = !b.parentId;
 
       // ルートタスク同士: 完了を下に
       if (aIsRoot && bIsRoot) {
-        if (a.done !== b.done) {
-          if (a.done) {
+        const aDone: boolean = !!a.done;
+        const bDone: boolean = !!b.done;
+        if (aDone !== bDone) {
+          if (aDone) {
             return 1;
           }
           return -1;
@@ -739,7 +740,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       // それ以外はsortOrder順
       return a.sortOrder - b.sortOrder;
     });
-    log('sort', { count: s.length });
+    log('sort', {
+      count: s.length,
+      order: s.filter((t) => !t.parentId).map((t) => ({ title: t.title.slice(0, 10), done: !!t.done, sort: t.sortOrder })),
+    });
     return s;
   }, [todos]);
 
