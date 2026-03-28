@@ -612,6 +612,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   // 表示モード
   const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid'>('detail');
 
+  // スマホではグリッドモードを使えないようにする
+  useEffect(() => {
+    if (isMobile && viewMode === 'grid') {
+      setViewMode('detail');
+    }
+  }, [isMobile, viewMode]);
+
   // カード展開
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -2509,14 +2516,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           >
             ≡
           </button>
-          <button
-            type="button"
-            className={`${styles.viewModeBtn} ${viewMode === 'grid' ? styles.viewModeBtnActive : ''}`}
-            onClick={() => { setViewMode('grid'); notifyTutorialAction('changeViewMode'); }}
-            title="グリッド表示"
-          >
-            ⊞
-          </button>
+          {!isMobile && (
+            <button
+              type="button"
+              className={`${styles.viewModeBtn} ${viewMode === 'grid' ? styles.viewModeBtnActive : ''}`}
+              onClick={() => { setViewMode('grid'); notifyTutorialAction('changeViewMode'); }}
+              title="グリッド表示"
+            >
+              ⊞
+            </button>
+          )}
         </div>
       </div>
 
