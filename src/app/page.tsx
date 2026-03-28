@@ -1044,11 +1044,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   async function toggleDone(id: string): Promise<void> {
     const target: Todo | undefined = todos.find((t) => t.id === id);
     if (!target) {
+      log('toggleDone:notFound', { id });
       return;
     }
 
-    const wasDone: boolean = target.done;
+    const wasDone: boolean = !!target.done;
     const newDone: boolean = !wasDone;
+    log('toggleDone:start', { id, title: target.title, wasDone, newDone, rawDone: target.done, typeofDone: typeof target.done });
     const now: number = Date.now();
 
     // 子孫タスクのIDを取得
