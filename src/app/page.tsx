@@ -644,22 +644,46 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   const sorted: Todo[] = useMemo((): Todo[] => {
     const copied: Todo[] = [...todos];
+
+    // 「下に並べ替え対象の完了タスク」かどうかを判定する
+    // 子タスクのみが完了の場合は対象にしない
+    // 単一タスク（子を持たない・親を持たない）または親タスクが完了の場合のみ対象
+    function shouldSortToBottom(t: Todo): boolean {
+      if (!t.done) {
+        return false;
+      }
+      // 親を持つタスク（子タスク）は並べ替えない
+      if (t.parentId) {
+        return false;
+      }
+      // ルートタスクかつ完了 → 下に並べ替え
+      return true;
+    }
+
     const s: Todo[] = copied.sort((a: Todo, b: Todo): number => {
       const aIsRoot: boolean = !a.parentId;
       const bIsRoot: boolean = !b.parentId;
 
-      // ルートタスク同士の場合、カード色の順で並べる
-      // リスク(cardDanger)=0 → 進行中(cardInProgress)=1 → 完了(cardDone)=2
+      // ルートタスク同士の場合のみ並べ替え
       if (aIsRoot && bIsRoot) {
-        const colorOrder: Record<string, number> = {
-          cardDanger: 0,
-          cardInProgress: 1,
-          cardDone: 2,
-        };
-        const aOrder: number = colorOrder[cardBgClass(a)] ?? 1;
-        const bOrder: number = colorOrder[cardBgClass(b)] ?? 1;
-        if (aOrder !== bOrder) {
-          return aOrder - bOrder;
+        const aBottom: boolean = shouldSortToBottom(a);
+        const bBottom: boolean = shouldSortToBottom(b);
+        if (aBottom !== bBottom) {
+          return aBottom ? 1 : -1;
+        }
+
+        // 完了でないルートタスク同士はカード色順
+        if (!aBottom && !bBottom) {
+          const colorOrder: Record<string, number> = {
+            cardDanger: 0,
+            cardInProgress: 1,
+            cardDone: 2,
+          };
+          const aOrder: number = colorOrder[cardBgClass(a)] ?? 1;
+          const bOrder: number = colorOrder[cardBgClass(b)] ?? 1;
+          if (aOrder !== bOrder) {
+            return aOrder - bOrder;
+          }
         }
       }
       // 同カテゴリ内はsortOrderの小さい方が上
