@@ -24,6 +24,7 @@ interface SavedMatrix {
  * 配置データをDBに保存・読み込みできる
  */
 export default function MatrixPanel({ todos, user }: { todos: Todo[]; user: AppUser }): React.ReactElement {
+  const [matrixView, setMatrixView] = useState<'edit' | 'history'>('edit');
   const [positions, setPositions] = useState<Record<string, Position>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
@@ -205,6 +206,60 @@ export default function MatrixPanel({ todos, user }: { todos: Todo[]; user: AppU
 
   return (
     <div className={styles.matrixPanel}>
+      {/* タブ切替 */}
+      <div className={styles.diaryModeBar} style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${matrixView === 'edit' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setMatrixView('edit')}
+        >
+          割り振り
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${matrixView === 'history' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setMatrixView('history')}
+        >
+          保存一覧
+        </button>
+      </div>
+
+      {/* 保存一覧ビュー */}
+      {matrixView === 'history' && (
+        <div>
+          {savedList.length === 0 ? (
+            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 32 }}>保存されたマトリクスはありません</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {savedList.map((saved) => (
+                <div
+                  key={saved.id}
+                  style={{ padding: 12, background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10, cursor: 'pointer' }}
+                  onClick={() => {
+                    setPositions(saved.data);
+                    setCurrentSaveId(saved.id);
+                    setMatrixView('edit');
+                    showMsg('「' + saved.name + '」を読み込みました');
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 600 }}>{saved.name}</span>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                      {new Date(saved.updatedAt).toLocaleDateString('ja-JP')}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                    {Object.keys(saved.data).length}件のタスクを配置
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 割り振りビュー */}
+      {matrixView === 'edit' && <>
       {/* ツールバー */}
       <div className={styles.matrixToolbar}>
         {currentSaveId ? (
@@ -372,6 +427,7 @@ export default function MatrixPanel({ todos, user }: { todos: Todo[]; user: AppU
           );
         })}
       </div>
+      </>}
     </div>
   );
 }

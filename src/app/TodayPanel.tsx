@@ -8,16 +8,18 @@ import styles from './page.module.css';
 /**
  * 今日やることビュー
  * 未完了タスクから今日やるものを選び、予定/実績の合計を表示する
- * タスクをクリックで展開し、詳細・実績入力・ステータス変更が可能
+ * タスク展開時はホーム画面と同じフォーマットで詳細を表示
  */
 export default function TodayPanel({
   todos,
   onToggleDone,
   onAddLog,
+  renderExpanded,
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
+  renderExpanded?: (t: Todo) => React.ReactNode;
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -66,12 +68,11 @@ export default function TodayPanel({
           background: isSelected ? '#eff6ff' : 'var(--card-bg)',
           border: `1px solid ${isSelected ? '#bfdbfe' : 'var(--card-border)'}`,
           borderLeft: `4px solid ${t.done ? '#22c55e' : isSelected ? '#3b82f6' : 'var(--card-border)'}`,
-          cursor: 'pointer',
         }}
       >
         {/* ヘッダー */}
         <div
-          style={{ display: 'flex', alignItems: 'center', gap: 10 }}
+          style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
           onClick={() => setExpandedId(isExpanded ? null : t.id)}
         >
           <input
@@ -81,7 +82,7 @@ export default function TodayPanel({
             onClick={(e) => e.stopPropagation()}
             className={styles.checkbox}
           />
-          {isSelected && (
+          {isSelected ? (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
@@ -90,8 +91,7 @@ export default function TodayPanel({
             >
               ✕
             </button>
-          )}
-          {!isSelected && (
+          ) : (
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
@@ -118,50 +118,28 @@ export default function TodayPanel({
           <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
         </div>
 
-        {/* 展開時の詳細 */}
+        {/* 展開時: renderExpandedがあればホーム画面と同じ、なければ簡易表示 */}
         {isExpanded && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--card-border)' }} onClick={(e) => e.stopPropagation()}>
-            {/* 詳細 */}
-            {t.detail && (
-              <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 8 }}>
-                {t.detail}
-              </div>
+            {renderExpanded ? (
+              renderExpanded(t)
+            ) : (
+              <>
+                {t.detail && (
+                  <div style={{ fontSize: 14, color: 'var(--muted)', marginBottom: 8 }}>{t.detail}</div>
+                )}
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+                  <input
+                    type="number" min="0" placeholder="分"
+                    value={logMinutes[t.id] ?? ''}
+                    onChange={(e) => setLogMinutes((prev) => ({ ...prev, [t.id]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
+                    className={styles.inputNarrow} disabled={t.done}
+                  />
+                  <button type="button" onClick={() => handleAddLog(t.id)} className={styles.iconBtn} disabled={t.done}>実績</button>
+                </div>
+              </>
             )}
-
-            {/* 実績入力 */}
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-              <input
-                type="number"
-                min="0"
-                placeholder="分"
-                value={logMinutes[t.id] ?? ''}
-                onChange={(e) => setLogMinutes((prev) => ({ ...prev, [t.id]: e.target.value }))}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    handleAddLog(t.id);
-                  }
-                }}
-                className={styles.inputNarrow}
-                disabled={t.done}
-              />
-              <button
-                type="button"
-                onClick={() => handleAddLog(t.id)}
-                className={styles.iconBtn}
-                disabled={t.done}
-              >
-                実績
-              </button>
-            </div>
-
-            {/* ステータス情報 */}
-            <div style={{ fontSize: 12, color: 'var(--muted)', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <span>予定: {minutesToText(t.estMin)}</span>
-              <span>実績: {minutesToText(t.actualMin)}</span>
-              <span>残り: {minutesToText(Math.max(0, t.estMin - t.actualMin))}</span>
-              {t.deadline && <span>期限: {formatDeadline(t.deadline)}</span>}
-              <span>{t.actualMin > 0 ? '着手済み' : '未着手'}</span>
-            </div>
           </div>
         )}
       </div>
@@ -171,40 +149,26 @@ export default function TodayPanel({
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       {/* 合計サマリー */}
-      <div style={{
-        marginBottom: 16, padding: 16, background: 'var(--card-bg)',
-        borderRadius: 12, border: '1px solid var(--card-border)',
-      }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>
-          今日やること ({selectedTodos.length}件)
-        </h3>
+      <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>今日やること ({selectedTodos.length}件)</h3>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>予定合計</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#3b82f6' }}>
-              {minutesToText(totalEst)}
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalEst)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>実績合計</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>
-              {minutesToText(totalActual)}
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{minutesToText(totalActual)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>残り</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: remaining > 0 ? '#ef4444' : '#22c55e' }}>
-              {minutesToText(remaining)}
-            </div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: remaining > 0 ? '#ef4444' : '#22c55e' }}>{minutesToText(remaining)}</div>
           </div>
         </div>
         {totalEst > 0 && (
           <div style={{ marginTop: 8 }}>
             <div style={{ width: '100%', height: 6, background: 'var(--input-border)', borderRadius: 3 }}>
-              <div style={{
-                width: `${Math.min(100, totalEst > 0 ? (totalActual / totalEst) * 100 : 0)}%`,
-                height: '100%', background: '#3b82f6', borderRadius: 3, transition: 'width 0.3s ease',
-              }} />
+              <div style={{ width: `${Math.min(100, (totalActual / totalEst) * 100)}%`, height: '100%', background: '#3b82f6', borderRadius: 3, transition: 'width 0.3s ease' }} />
             </div>
           </div>
         )}
@@ -214,16 +178,12 @@ export default function TodayPanel({
       {selectedTodos.length > 0 && (
         <div style={{ marginBottom: 16 }}>
           <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--muted)' }}>選択中</h4>
-          <div style={{ display: 'grid', gap: 6 }}>
-            {selectedTodos.map((t) => renderTaskCard(t, true))}
-          </div>
+          <div style={{ display: 'grid', gap: 6 }}>{selectedTodos.map((t) => renderTaskCard(t, true))}</div>
         </div>
       )}
 
       {/* 未完了タスク一覧 */}
-      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--muted)' }}>
-        未完了タスクから選ぶ
-      </h4>
+      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--muted)' }}>未完了タスクから選ぶ</h4>
       <div style={{ display: 'grid', gap: 4 }}>
         {undoneTodos.filter((t) => !selectedIds.has(t.id)).map((t) => renderTaskCard(t, false))}
         {undoneTodos.length === 0 && (

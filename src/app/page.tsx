@@ -293,7 +293,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  const [activeTab, setActiveTab] = useState<'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
@@ -2133,7 +2133,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
       <header className={styles.topBar}>
         <h1 className={styles.headerTitle}>
-          {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
+          {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'category-stats' ? 'カテゴリ別実績' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
         </h1>
         <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }}>
           {activeTab === 'tasks' ? 'タスクの追加・編集・完了管理' :
@@ -2142,6 +2142,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
            activeTab === 'task-sets' ? 'タスクのテンプレートを作成・管理' :
            activeTab === 'matrix' ? '緊急性と重要性でタスクを整理' :
            activeTab === 'activity' ? '作業ログ・統計・パレート分析' :
+           activeTab === 'category-stats' ? 'カテゴリごとの達成率・作業時間・月別グラフ' :
            activeTab === 'archived' ? '削除したタスクの復元' :
            activeTab === 'diary-write' ? 'その日の出来事を記録' :
            activeTab === 'diary-view' ? '過去の日記を検索・閲覧' :
@@ -2236,42 +2237,41 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             <div className={styles.menuGroupLabel}>記録</div>
             <button
               type="button"
-              className={styles.menuItem}
-              onClick={() => setDiaryMenuOpen(!diaryMenuOpen)}
-            >
-              日記 {diaryMenuOpen ? '▾' : '▸'}
-            </button>
-            {diaryMenuOpen && (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'diary-write' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('diary-write'); setMenuOpen(false); }}
-                >
-                  書く
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'diary-view' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('diary-view'); setMenuOpen(false); }}
-                >
-                  履歴
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'diary-public' ? styles.menuItemActive : ''}`}
-                  onClick={() => { switchTab('diary-public'); }}
-                >
-                  みんなの日記 {!isPro && '🔒'}
-                </button>
-              </>
-            )}
-            <button
-              type="button"
               className={`${styles.menuItem} ${activeTab === 'activity' ? styles.menuItemActive : ''}`}
               onClick={() => { setActiveTab('activity'); setMenuOpen(false); }}
             >
               作業記録
+            </button>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'category-stats' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('category-stats'); setMenuOpen(false); }}
+            >
+              カテゴリ別実績
+            </button>
+
+            {/* --- 日記グループ --- */}
+            <div className={styles.menuGroupLabel}>日記</div>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'diary-write' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('diary-write'); setMenuOpen(false); }}
+            >
+              書く
+            </button>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'diary-view' ? styles.menuItemActive : ''}`}
+              onClick={() => { setActiveTab('diary-view'); setMenuOpen(false); }}
+            >
+              履歴
+            </button>
+            <button
+              type="button"
+              className={`${styles.menuItem} ${activeTab === 'diary-public' ? styles.menuItemActive : ''}`}
+              onClick={() => { switchTab('diary-public'); }}
+            >
+              みんなの日記 {!isPro && '🔒'}
             </button>
 
             {/* --- アカウントグループ --- */}
@@ -3652,6 +3652,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now(), started: 1 } }),
             });
           }}
+          renderExpanded={(t: Todo) => renderExpandedContent(t)}
         />
       )}
 
