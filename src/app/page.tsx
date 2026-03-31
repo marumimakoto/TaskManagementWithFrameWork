@@ -2584,7 +2584,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             />
           </div>
         </div>
-        {/* カテゴリ選択 */}
         <div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>カテゴリ（任意）</span>

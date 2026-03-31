@@ -606,21 +606,7 @@ export default function TaskSetPanel({
                         className={styles.input}
                       />
                     </div>
-                    <div>
-                      <label className={styles.fieldLabel}>繰り返し</label>
-                      <select
-                        value={newRecurrence}
-                        onChange={(e) => setNewRecurrence(e.target.value)}
-                        className={styles.input}
-                      >
-                        <option value="carry">繰り返さない</option>
-                        <option value="day">毎日</option>
-                        <option value="week:mon">毎週月曜</option>
-                        <option value="week:weekday">毎週平日</option>
-                        <option value="month:same-date">毎月同じ日</option>
-                        <option value="year">毎年</option>
-                      </select>
-                    </div>
+                    {/* 繰り返し設定はタスクセットでは無効（常にcarry） */}
                     <div>
                       <label className={styles.fieldLabel}>期限（X日後）</label>
                       <input
