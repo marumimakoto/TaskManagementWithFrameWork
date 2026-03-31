@@ -84,11 +84,11 @@ export async function PUT(
 
   // 繰り返し設定が変更された場合、recurring_rulesを更新
   if (updates.recurrence !== undefined) {
-    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null }>(
-      'SELECT user_id, title, est_min, detail, deadline FROM todos WHERE id = ?', id
+    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null; recurrence: string }>(
+      'SELECT user_id, title, est_min, detail, deadline, recurrence FROM todos WHERE id = ?', id
     );
-    if (todo) {
-      // 既存ルール（同タイトル）を無効化
+    if (todo && updates.recurrence !== todo.recurrence) {
+      // 繰り返し設定が実際に変わった場合のみ、既存ルール（同タイトル）を無効化
       await db.run(
         'UPDATE recurring_rules SET enabled = 0 WHERE user_id = ? AND title = ?',
         todo.user_id, todo.title
