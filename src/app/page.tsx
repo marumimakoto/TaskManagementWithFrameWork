@@ -3652,7 +3652,17 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           onApply={async (items) => {
             const minOrder: number = todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) : 0;
             for (let i: number = 0; i < items.length; i++) {
-              const deadlineTs: number | undefined = items[i].deadline ? new Date(items[i].deadline + 'T23:59:59').getTime() : undefined;
+              // deadlineはX日後の数値文字列（例: "3"）→ 今日からX日後の23:59:59に変換
+              let deadlineTs: number | undefined = undefined;
+              if (items[i].deadline) {
+                const daysLater: number = parseInt(items[i].deadline as string, 10);
+                if (!isNaN(daysLater) && daysLater >= 0) {
+                  const d: Date = new Date();
+                  d.setDate(d.getDate() + daysLater);
+                  d.setHours(23, 59, 59, 999);
+                  deadlineTs = d.getTime();
+                }
+              }
               const todo = {
                 id: uid(),
                 title: items[i].title,

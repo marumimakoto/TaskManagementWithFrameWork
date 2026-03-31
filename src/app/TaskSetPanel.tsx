@@ -622,9 +622,11 @@ export default function TaskSetPanel({
                       </select>
                     </div>
                     <div>
-                      <label className={styles.fieldLabel}>締切</label>
+                      <label className={styles.fieldLabel}>期限（X日後）</label>
                       <input
-                        type="date"
+                        type="number"
+                        min="0"
+                        placeholder="例: 3"
                         value={newDeadline}
                         onChange={(e) => setNewDeadline(e.target.value)}
                         className={styles.input}
@@ -749,7 +751,7 @@ export default function TaskSetPanel({
                               />
                               <span className={styles.compactDetailMeta}>
                                 繰り返し: {item.recurrence === 'carry' ? 'なし' : item.recurrence}
-                                {item.deadline && ` / 締切: ${item.deadline}`}
+                                {item.deadline && ` / 期限: ${item.deadline}日後`}
                               </span>
                             </div>
                           )}
