@@ -40,6 +40,7 @@ const BugReportPanel = dynamic(() => import('./BugReportPanel'));
 const AdminPanel = dynamic(() => import('./AdminPanel'));
 const TodayPanel = dynamic(() => import('./TodayPanel'));
 const CalendarPanel = dynamic(() => import('./CalendarPanel'));
+const CategoryStatsPanel = dynamic(() => import('./CategoryStatsPanel'));
 
 /**
  * ページのルートコンポーネント
@@ -3658,6 +3659,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {activeTab === 'calendar' && (
         <CalendarPanel todos={todos} />
+      )}
+
+      {activeTab === 'category-stats' && (
+        <CategoryStatsPanel user={user} />
       )}
 
       {activeTab === 'archived' && (
