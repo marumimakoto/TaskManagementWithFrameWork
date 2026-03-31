@@ -52,6 +52,8 @@ export default function TaskSetPanel({
   const [loading, setLoading] = useState<boolean>(true);
   const [publicLoading, setPublicLoading] = useState<boolean>(false);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
+  const [editingSetName, setEditingSetName] = useState<string | null>(null);
+  const [editSetNameValue, setEditSetNameValue] = useState<string>('');
   const [viewMode, setViewMode] = useState<'mine' | 'public'>('mine');
   const [publicSearch, setPublicSearch] = useState<string>('');
   const [publicSort, setPublicSort] = useState<'newest' | 'likes'>('newest');
@@ -491,7 +493,55 @@ export default function TaskSetPanel({
             <div className={styles.diaryCardHeader}>
               <span className={styles.diaryTitle}>
                 {editingSetId === set.id ? '▾ ' : '▸ '}
-                {set.name}
+                {editingSetName === set.id ? (
+                  <input
+                    value={editSetNameValue}
+                    onChange={(e) => setEditSetNameValue(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        const newName: string = editSetNameValue.trim();
+                        if (newName) {
+                          setSets((prev) => prev.map((s) => (s.id === set.id ? { ...s, name: newName } : s)));
+                          fetch('/api/task-sets/' + set.id, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ action: 'rename', name: newName }),
+                          });
+                        }
+                        setEditingSetName(null);
+                      } else if (e.key === 'Escape') {
+                        setEditingSetName(null);
+                      }
+                    }}
+                    onBlur={() => {
+                      const newName: string = editSetNameValue.trim();
+                      if (newName && newName !== set.name) {
+                        setSets((prev) => prev.map((s) => (s.id === set.id ? { ...s, name: newName } : s)));
+                        fetch('/api/task-sets/' + set.id, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ action: 'rename', name: newName }),
+                        });
+                      }
+                      setEditingSetName(null);
+                    }}
+                    className={styles.input}
+                    style={{ width: 200, fontSize: 14 }}
+                    autoFocus
+                  />
+                ) : (
+                  <span
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      setEditingSetName(set.id);
+                      setEditSetNameValue(set.name);
+                    }}
+                    title="ダブルクリックで名前を変更"
+                  >
+                    {set.name}
+                  </span>
+                )}
                 <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>
                   ({set.items.length}件)
                 </span>

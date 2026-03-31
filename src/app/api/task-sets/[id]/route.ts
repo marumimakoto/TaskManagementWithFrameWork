@@ -26,6 +26,15 @@ export async function PUT(
 
     const action: string = body.action;
 
+    if (action === 'rename') {
+      const newName: string = body.name?.trim();
+      if (!newName) {
+        return NextResponse.json({ error: 'name is required' }, { status: 400 });
+      }
+      await db.run('UPDATE task_sets SET name = ? WHERE id = ?', newName, id);
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === 'updateItem') {
       const { itemId, updates } = body;
       const fields: string[] = [];

@@ -1859,6 +1859,35 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           </div>
         )}
 
+        {/* カテゴリ変更 */}
+        <div style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: '13px' }}>
+          <span>📁</span>
+          {[{ id: '', name: 'なし' }, ...todoCategories].map((cat) => (
+            <button
+              key={cat.id || '__none__'}
+              type="button"
+              onClick={() => {
+                const newCat: string = cat.name === 'なし' ? '' : cat.name;
+                setTodos((prev) => prev.map((todo) => (todo.id === t.id ? { ...todo, category: newCat } : todo)));
+                fetch('/api/todos/' + t.id, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ updates: { category: newCat } }),
+                });
+              }}
+              style={{
+                padding: '2px 8px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+                border: (t.category || '') === (cat.name === 'なし' ? '' : cat.name) ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                background: (t.category || '') === (cat.name === 'なし' ? '' : cat.name) ? '#dbeafe' : 'var(--card-bg)',
+                color: (t.category || '') === (cat.name === 'なし' ? '' : cat.name) ? '#1d4ed8' : 'var(--foreground)',
+                fontWeight: (t.category || '') === (cat.name === 'なし' ? '' : cat.name) ? 600 : 400,
+              }}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
         {/* 移動操作ボタン */}
         <MoveButtonBar
           onUp={() => moveUp(t.id)}
@@ -1913,17 +1942,19 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             }
             className={styles.inputDate}
           />
-          <input
-            type="text"
-            placeholder="やったことを記録..."
+          <textarea
+            placeholder="やったことを記録...（Ctrl+Enterで記録、Shift+Enterで改行）"
             value={logInput}
             onChange={(e) => setLogInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter') {
+              if (e.key === 'Enter' && e.ctrlKey) {
+                e.preventDefault();
                 addWorkLog(t.id);
               }
             }}
             className={styles.input}
+            rows={2}
+            style={{ resize: 'vertical' }}
           />
           <button
             type="button"
@@ -2514,7 +2545,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               onClick={() => setShowCategoryManager(!showCategoryManager)}
               style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
             >
-              {showCategoryManager ? '閉じる' : '管理'}
+              {showCategoryManager ? '閉じる' : 'カテゴリ管理'}
             </button>
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>

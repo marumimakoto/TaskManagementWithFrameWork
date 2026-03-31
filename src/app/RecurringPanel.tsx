@@ -65,6 +65,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRecurrence, setEditRecurrence] = useState<string>('daily');
   const [message, setMessage] = useState<string>('');
+  const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
 
   const fetchItems = useCallback(async (): Promise<void> => {
     try {
@@ -107,9 +108,12 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
 
   /** 繰り返し設定を解除する（carry に戻す） */
   async function removeRecurrence(id: string): Promise<void> {
+    const removed: RecurringTodo | undefined = items.find((item) => item.id === id);
     // 楽観的更新：即座にリストから削除
     setItems((prev) => prev.filter((item) => item.id !== id));
-    showMsg('繰り返しを解除しました');
+    setUndoItem(removed ?? null);
+    showMsg('');  // 既存メッセージをクリア
+
     try {
       const res: Response = await fetch('/api/todos/recurring', {
         method: 'DELETE',
@@ -117,7 +121,6 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
         body: JSON.stringify({ id }),
       });
       if (!res.ok) {
-        // 失敗時はリストを再取得
         await fetchItems();
       }
       onRefresh();
@@ -125,6 +128,26 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
       console.error('Failed to remove recurrence', e);
       await fetchItems();
     }
+
+    // 3秒後にUndoを消す
+    setTimeout(() => {
+      setUndoItem((current) => (current?.id === id ? null : current));
+    }, 5000);
+  }
+
+  async function undoRemove(): Promise<void> {
+    if (!undoItem) {
+      return;
+    }
+    // recurring_rulesのenabledを1に戻す
+    await fetch('/api/todos/recurring', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: undoItem.id, updates: { enabled: true } }),
+    });
+    setUndoItem(null);
+    await fetchItems();
+    showMsg('繰り返しを復元しました');
   }
 
   if (loading) {
@@ -136,6 +159,16 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
       <h2 className={styles.panelTitle}>繰り返しタスク一覧</h2>
       {message && (
         <p style={{ color: '#22c55e', fontSize: '13px', marginBottom: 8 }}>{message}</p>
+      )}
+      {undoItem && (
+        <div className={styles.toast} style={{ position: 'relative', marginBottom: 8 }}>
+          <div className={styles.toastMessage}>
+            「{undoItem.title}」の繰り返しを解除しました
+          </div>
+          <button onClick={undoRemove} className={styles.iconBtn}>
+            取り消す
+          </button>
+        </div>
       )}
 
       {items.length === 0 ? (
