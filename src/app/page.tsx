@@ -2388,6 +2388,37 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           className={styles.textarea}
           rows={2}
         />
+        {/* カテゴリ選択 */}
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>カテゴリ（任意）</span>
+            <button type="button" onClick={() => setShowCategoryManager(!showCategoryManager)} style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}>
+              {showCategoryManager ? '閉じる' : 'カテゴリ管理'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button type="button" onClick={() => setSelectedCategory('')} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer', border: selectedCategory === '' ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: selectedCategory === '' ? '#dbeafe' : 'var(--card-bg)', color: selectedCategory === '' ? '#1d4ed8' : 'var(--foreground)', fontWeight: selectedCategory === '' ? 600 : 400 }}>なし</button>
+            {todoCategories.map((cat) => (
+              <button key={cat.id} type="button" onClick={() => setSelectedCategory(cat.name)} style={{ padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer', border: selectedCategory === cat.name ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: selectedCategory === cat.name ? '#dbeafe' : 'var(--card-bg)', color: selectedCategory === cat.name ? '#1d4ed8' : 'var(--foreground)', fontWeight: selectedCategory === cat.name ? 600 : 400 }}>{cat.name}</button>
+            ))}
+          </div>
+          {showCategoryManager && (
+            <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--card-border)' }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <input placeholder="新しいカテゴリ名" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} className={styles.input} style={{ flex: 1 }} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); const name = newCategoryName.trim(); if (!name || todoCategories.some((c) => c.name === name)) { return; } fetch('/api/todo-categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, name }) }).then((r) => r.json()).then((data) => { setTodoCategories((prev) => [...prev, { id: data.id, name }]); setNewCategoryName(''); }); } }} />
+                <button type="button" className={styles.primaryBtn} style={{ padding: '6px 12px', fontSize: 13 }} onClick={() => { const name = newCategoryName.trim(); if (!name || todoCategories.some((c) => c.name === name)) { return; } fetch('/api/todo-categories', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ userId: user.id, name }) }).then((r) => r.json()).then((data) => { setTodoCategories((prev) => [...prev, { id: data.id, name }]); setNewCategoryName(''); }); }}>追加</button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {todoCategories.map((cat) => (
+                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#e2e8f0', fontSize: 13 }}>
+                    <span>{cat.name}</span>
+                    <button type="button" onClick={() => { fetch('/api/todo-categories', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: cat.id, userId: user.id }) }).then(() => { setTodoCategories((prev) => prev.filter((c) => c.id !== cat.id)); setTodos((prev) => prev.map((t) => (t.category === cat.name ? { ...t, category: '' } : t))); }); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1 }}>×</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <div className={styles.addFormRow}>
           <div>
             <label className={styles.fieldLabel}>予定時間（分）</label>
@@ -2558,123 +2589,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               className={styles.input}
             />
           </div>
-        </div>
-        <div>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span>カテゴリ（任意）</span>
-            <button
-              type="button"
-              onClick={() => setShowCategoryManager(!showCategoryManager)}
-              style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
-            >
-              {showCategoryManager ? '閉じる' : 'カテゴリ管理'}
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => setSelectedCategory('')}
-              style={{
-                padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
-                border: selectedCategory === '' ? '2px solid #3b82f6' : '1px solid var(--card-border)',
-                background: selectedCategory === '' ? '#dbeafe' : 'var(--card-bg)',
-                color: selectedCategory === '' ? '#1d4ed8' : 'var(--foreground)',
-                fontWeight: selectedCategory === '' ? 600 : 400,
-              }}
-            >
-              なし
-            </button>
-            {todoCategories.map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setSelectedCategory(cat.name)}
-                style={{
-                  padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
-                  border: selectedCategory === cat.name ? '2px solid #3b82f6' : '1px solid var(--card-border)',
-                  background: selectedCategory === cat.name ? '#dbeafe' : 'var(--card-bg)',
-                  color: selectedCategory === cat.name ? '#1d4ed8' : 'var(--foreground)',
-                  fontWeight: selectedCategory === cat.name ? 600 : 400,
-                }}
-              >
-                {cat.name}
-              </button>
-            ))}
-          </div>
-          {showCategoryManager && (
-            <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--card-border)' }}>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                <input
-                  placeholder="新しいカテゴリ名"
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  className={styles.input}
-                  style={{ flex: 1 }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      const name: string = newCategoryName.trim();
-                      if (!name || todoCategories.some((c) => c.name === name)) {
-                        return;
-                      }
-                      fetch('/api/todo-categories', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ userId: user.id, name }),
-                      }).then((r) => r.json()).then((data) => {
-                        setTodoCategories((prev) => [...prev, { id: data.id, name }]);
-                        setNewCategoryName('');
-                      });
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className={styles.primaryBtn}
-                  style={{ padding: '6px 12px', fontSize: 13 }}
-                  onClick={() => {
-                    const name: string = newCategoryName.trim();
-                    if (!name || todoCategories.some((c) => c.name === name)) {
-                      return;
-                    }
-                    fetch('/api/todo-categories', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ userId: user.id, name }),
-                    }).then((r) => r.json()).then((data) => {
-                      setTodoCategories((prev) => [...prev, { id: data.id, name }]);
-                      setNewCategoryName('');
-                    });
-                  }}
-                >
-                  追加
-                </button>
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {todoCategories.map((cat) => (
-                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#e2e8f0', fontSize: 13 }}>
-                    <span>{cat.name}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        fetch('/api/todo-categories', {
-                          method: 'DELETE',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ id: cat.id, userId: user.id }),
-                        }).then(() => {
-                          setTodoCategories((prev) => prev.filter((c) => c.id !== cat.id));
-                          setTodos((prev) => prev.map((t) => (t.category === cat.name ? { ...t, category: '' } : t)));
-                        });
-                      }}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1 }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
         <button data-tutorial="task-add-btn" type="button" onClick={addTodo} className={styles.primaryBtn}>
           追加
