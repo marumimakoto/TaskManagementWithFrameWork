@@ -530,7 +530,7 @@ export default function TaskSetPanel({
 
             {/* セット展開中：アイテム追加フォーム + アイテム一覧 */}
             {editingSetId === set.id && (
-              <div style={{ marginTop: 10 }}>
+              <div style={{ marginTop: 10 }} onClick={(e) => e.stopPropagation()}>
                 {/* 追加フォーム */}
                 <div style={{ border: '1px solid var(--input-border)', borderRadius: 10, padding: 10, marginBottom: 10, background: 'var(--background)' }}>
                   <label className={styles.fieldLabel}>タスクを追加</label>

@@ -108,10 +108,10 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   /** 繰り返し設定を解除する（carry に戻す） */
   async function removeRecurrence(id: string): Promise<void> {
     try {
-      await fetch('/api/todos/' + id, {
-        method: 'PUT',
+      await fetch('/api/todos/recurring', {
+        method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: { recurrence: 'carry' } }),
+        body: JSON.stringify({ id }),
       });
       await fetchItems();
       onRefresh();
