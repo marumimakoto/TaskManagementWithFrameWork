@@ -39,6 +39,8 @@ export type Todo = {
   recurrence: Recurrence;
   /** タスクの詳細説明 */
   detail?: string;
+  /** カテゴリ */
+  category?: string;
   /** 着手済みフラグ */
   started: boolean;
   /** 完了フラグ */

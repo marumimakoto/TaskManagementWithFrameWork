@@ -98,6 +98,13 @@ async function initializeTables(c: Client): Promise<void> {
       last_refresh_date TEXT,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,
+    `CREATE TABLE IF NOT EXISTS todo_categories (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+    )`,
     `CREATE TABLE IF NOT EXISTS todos (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL,
@@ -110,6 +117,7 @@ async function initializeTables(c: Client): Promise<void> {
       deadline INTEGER,
       recurrence TEXT NOT NULL DEFAULT 'carry',
       detail TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT '',
       started INTEGER NOT NULL DEFAULT 0,
       done INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,

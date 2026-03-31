@@ -639,6 +639,15 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       setLoading(false);
     }
     initAll();
+    // カテゴリ一覧を取得
+    fetch('/api/todo-categories?userId=' + user.id)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setTodoCategories(data);
+        }
+      })
+      .catch(() => {});
   }, [user.id]);
 
   /** 設定をCSS変数としてdocumentに適用する */
@@ -686,6 +695,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   /** 直前のカスタム繰り返し設定文字列（プリセットに切り替えた後に戻すため） */
   const lastCustomRecurrenceRef = useRef<string>('');
   const [deadlineText, setDeadlineText] = useState('');
+  const [todoCategories, setTodoCategories] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [showCategoryManager, setShowCategoryManager] = useState<boolean>(false);
+  const [newCategoryName, setNewCategoryName] = useState<string>('');
 
   // 表示モード
   const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid' | 'kanban'>('detail');
@@ -854,23 +868,32 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   /** ステータスフィルターを適用したtreeList */
   const filteredTreeList: { todo: Todo; depth: number }[] = useMemo((): { todo: Todo; depth: number }[] => {
-    if (statusFilter === 'all') {
-      return treeList;
+    let result: { todo: Todo; depth: number }[] = treeList;
+
+    // ステータスフィルター
+    if (statusFilter !== 'all') {
+      result = result.filter(({ todo: t }) => {
+        const bg: string = cardBgClass(t);
+        if (statusFilter === 'danger') {
+          return bg === 'cardDanger';
+        }
+        if (statusFilter === 'inProgress') {
+          return bg === 'cardInProgress';
+        }
+        if (statusFilter === 'done') {
+          return bg === 'cardDone';
+        }
+        return true;
+      });
     }
-    return treeList.filter(({ todo: t }) => {
-      const bg: string = cardBgClass(t);
-      if (statusFilter === 'danger') {
-        return bg === 'cardDanger';
-      }
-      if (statusFilter === 'inProgress') {
-        return bg === 'cardInProgress';
-      }
-      if (statusFilter === 'done') {
-        return bg === 'cardDone';
-      }
-      return true;
-    });
-  }, [treeList, statusFilter]);
+
+    // カテゴリフィルター
+    if (categoryFilter !== 'all') {
+      result = result.filter(({ todo: t }) => (t.category || '') === categoryFilter);
+    }
+
+    return result;
+  }, [treeList, statusFilter, categoryFilter]);
 
   /** FLIPアニメーション: treeListが変わった後にカードの移動をアニメーションする */
   useEffect(() => {
@@ -1137,6 +1160,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       lastWorkedAt: undefined,
       deadline: d,
       recurrence: finalRecurrence,
+      category: selectedCategory,
       started: false,
       done: false,
       sortOrder: minOrder - 1,
@@ -1151,6 +1175,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     setEstText('30');
     setDeadlineText('');
     setMode('carry');
+    setSelectedCategory('');
 
     await fetch('/api/todos', {
       method: 'POST',
@@ -2472,6 +2497,124 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             />
           </div>
         </div>
+        {/* カテゴリ選択 */}
+        <div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>カテゴリ（任意）</span>
+            <button
+              type="button"
+              onClick={() => setShowCategoryManager(!showCategoryManager)}
+              style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
+            >
+              {showCategoryManager ? '閉じる' : '管理'}
+            </button>
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setSelectedCategory('')}
+              style={{
+                padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
+                border: selectedCategory === '' ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                background: selectedCategory === '' ? '#dbeafe' : 'var(--card-bg)',
+                color: selectedCategory === '' ? '#1d4ed8' : 'var(--foreground)',
+                fontWeight: selectedCategory === '' ? 600 : 400,
+              }}
+            >
+              なし
+            </button>
+            {todoCategories.map((cat) => (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => setSelectedCategory(cat.name)}
+                style={{
+                  padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
+                  border: selectedCategory === cat.name ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                  background: selectedCategory === cat.name ? '#dbeafe' : 'var(--card-bg)',
+                  color: selectedCategory === cat.name ? '#1d4ed8' : 'var(--foreground)',
+                  fontWeight: selectedCategory === cat.name ? 600 : 400,
+                }}
+              >
+                {cat.name}
+              </button>
+            ))}
+          </div>
+          {showCategoryManager && (
+            <div style={{ marginTop: 8, padding: 10, background: '#f8fafc', borderRadius: 8, border: '1px solid var(--card-border)' }}>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                <input
+                  placeholder="新しいカテゴリ名"
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  className={styles.input}
+                  style={{ flex: 1 }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      const name: string = newCategoryName.trim();
+                      if (!name || todoCategories.some((c) => c.name === name)) {
+                        return;
+                      }
+                      fetch('/api/todo-categories', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: user.id, name }),
+                      }).then((r) => r.json()).then((data) => {
+                        setTodoCategories((prev) => [...prev, { id: data.id, name }]);
+                        setNewCategoryName('');
+                      });
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  style={{ padding: '6px 12px', fontSize: 13 }}
+                  onClick={() => {
+                    const name: string = newCategoryName.trim();
+                    if (!name || todoCategories.some((c) => c.name === name)) {
+                      return;
+                    }
+                    fetch('/api/todo-categories', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ userId: user.id, name }),
+                    }).then((r) => r.json()).then((data) => {
+                      setTodoCategories((prev) => [...prev, { id: data.id, name }]);
+                      setNewCategoryName('');
+                    });
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {todoCategories.map((cat) => (
+                  <div key={cat.id} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 999, background: '#e2e8f0', fontSize: 13 }}>
+                    <span>{cat.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fetch('/api/todo-categories', {
+                          method: 'DELETE',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ id: cat.id, userId: user.id }),
+                        }).then(() => {
+                          setTodoCategories((prev) => prev.filter((c) => c.id !== cat.id));
+                          setTodos((prev) => prev.map((t) => (t.category === cat.name ? { ...t, category: '' } : t)));
+                        });
+                      }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
         <button data-tutorial="task-add-btn" type="button" onClick={addTodo} className={styles.primaryBtn}>
           追加
         </button>
@@ -2668,6 +2811,41 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       >
         親との階層化を解除
       </div>
+
+      {/* カテゴリフィルター */}
+      {todoCategories.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => setCategoryFilter('all')}
+            style={{
+              padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+              border: categoryFilter === 'all' ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+              background: categoryFilter === 'all' ? '#dbeafe' : 'var(--card-bg)',
+              color: categoryFilter === 'all' ? '#1d4ed8' : 'var(--foreground)',
+              fontWeight: categoryFilter === 'all' ? 600 : 400,
+            }}
+          >
+            全て
+          </button>
+          {todoCategories.map((cat) => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => setCategoryFilter(categoryFilter === cat.name ? 'all' : cat.name)}
+              style={{
+                padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+                border: categoryFilter === cat.name ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                background: categoryFilter === cat.name ? '#dbeafe' : 'var(--card-bg)',
+                color: categoryFilter === cat.name ? '#1d4ed8' : 'var(--foreground)',
+                fontWeight: categoryFilter === cat.name ? 600 : 400,
+              }}
+            >
+              {cat.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Todo list — detail (既存の詳細表示) */}
       {viewMode === 'detail' && <section data-tutorial="task-list" className={`${styles.todoList} ${dragId ? styles.todoListDragging : ''}`}>
@@ -2987,6 +3165,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     title="ダブルクリックで編集"
                   >
                     {t.title}
+                    {t.category && (
+                      <span style={{ marginLeft: 8, fontSize: 11, padding: '1px 6px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600, verticalAlign: 'middle' }}>
+                        {t.category}
+                      </span>
+                    )}
                   </div>
                 )}
 

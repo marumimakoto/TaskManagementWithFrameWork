@@ -16,6 +16,7 @@ interface TodoRow {
   deadline: number | null;
   recurrence: string;
   detail: string;
+  category: string;
   started: number;
   done: number;
   sort_order: number;
@@ -40,6 +41,7 @@ function rowToTodo(row: TodoRow): Todo {
     deadline: row.deadline ?? undefined,
     recurrence: row.recurrence as Recurrence,
     detail: row.detail || undefined,
+    category: row.category || '',
     started: row.started === 1,
     done: row.done === 1,
     createdAt: row.created_at,
@@ -82,8 +84,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const db = await getDb();
   await db.run(`
-    INSERT INTO todos (id, user_id, parent_id, title, est_min, actual_min, stuck_hours, last_worked_at, deadline, recurrence, detail, started, done, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO todos (id, user_id, parent_id, title, est_min, actual_min, stuck_hours, last_worked_at, deadline, recurrence, detail, category, started, done, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `,
     todo.id,
     userId,
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     todo.deadline ?? null,
     todo.recurrence,
     todo.detail ?? '',
+    todo.category ?? '',
     todo.started ? 1 : 0,
     todo.done ? 1 : 0,
     todo.sortOrder ?? 0,

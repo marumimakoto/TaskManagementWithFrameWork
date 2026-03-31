@@ -30,6 +30,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       deadline: row.deadline,
       recurrence: row.recurrence,
       detail: row.detail,
+      category: row.category || '',
       started: row.started === 1,
       done: row.done === 1,
       sortOrder: row.sort_order,

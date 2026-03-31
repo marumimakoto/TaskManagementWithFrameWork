@@ -66,6 +66,10 @@ export async function PUT(
     fields.push('sort_order = ?');
     values.push(updates.sortOrder);
   }
+  if (updates.category !== undefined) {
+    fields.push('category = ?');
+    values.push(updates.category);
+  }
   if (updates.started !== undefined) {
     fields.push('started = ?');
     values.push(updates.started ? 1 : 0);
