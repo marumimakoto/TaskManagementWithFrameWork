@@ -1971,6 +1971,46 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <li key={wl.id} className={styles.workLogItem}>
                   <span className={styles.workLogDate}>{wl.date}</span>
                   <span className={styles.workLogContent}>{wl.content}</span>
+                  <button
+                    type="button"
+                    className={styles.dangerIconBtn}
+                    style={{ fontSize: 10, padding: '1px 6px', marginLeft: 'auto', flexShrink: 0 }}
+                    onClick={() => {
+                      // 楽観的削除
+                      setWorkLogs((prev) => ({
+                        ...prev,
+                        [t.id]: (prev[t.id] ?? []).filter((l: WorkLog) => l.id !== wl.id),
+                      }));
+                      // Undoトースト
+                      showUndoToast({
+                        toastId: 'wl-' + wl.id,
+                        todoId: t.id,
+                        message: '作業記録を削除しました',
+                        undoLabel: '取り消す',
+                        undo: () => {
+                          // 復元
+                          setWorkLogs((prev) => ({
+                            ...prev,
+                            [t.id]: [...(prev[t.id] ?? []), wl].sort((a: WorkLog, b: WorkLog) => b.createdAt - a.createdAt),
+                          }));
+                          // DB復元（POSTで再作成）
+                          fetch('/api/todos/' + t.id + '/logs', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ content: wl.content, date: wl.date }),
+                          });
+                        },
+                      });
+                      // DB削除
+                      fetch('/api/todos/' + t.id + '/logs', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ logId: wl.id }),
+                      });
+                    }}
+                  >
+                    🗑
+                  </button>
                 </li>
               ))}
             </ul>
@@ -3698,7 +3738,25 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'today' && (
-        <TodayPanel todos={todos} onToggleDone={toggleDone} />
+        <TodayPanel
+          todos={todos}
+          onToggleDone={toggleDone}
+          onAddLog={(id: string, minutes: number) => {
+            const target: Todo | undefined = todos.find((t) => t.id === id);
+            if (!target) {
+              return;
+            }
+            const newActual: number = target.actualMin + minutes;
+            setTodos((prev) =>
+              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: Date.now(), started: true } : t)),
+            );
+            fetch('/api/todos/' + id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now(), started: 1 } }),
+            });
+          }}
+        />
       )}
 
       {activeTab === 'archived' && (

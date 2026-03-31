@@ -12,8 +12,9 @@ interface RecurringTodo {
   estMin: number;
   recurrence: string;
   detail?: string;
-  deadline?: number;
-  done: boolean;
+  deadlineOffsetDays?: number | null;
+  generatedCount: number;
+  completedCount: number;
   createdAt: number;
 }
 
@@ -180,14 +181,20 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
               <div className={styles.archiveCardMain}>
                 <span
                   className={styles.activityTypeBadge}
-                  style={{ background: t.done ? '#22c55e' : '#3b82f6' }}
+                  style={{ background: '#3b82f6' }}
                 >
-                  {t.done ? '完了' : '未完了'}
+                  有効
                 </span>
                 <span className={styles.archiveTitle}>{t.title}</span>
                 <span style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent, #2563eb)' }}>
                   🔁 {recurrenceLabel(t.recurrence)}
                 </span>
+                {t.generatedCount > 0 && (
+                  <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>
+                    達成率: {t.completedCount}/{t.generatedCount}
+                    ({t.generatedCount > 0 ? Math.round((t.completedCount / t.generatedCount) * 100) : 0}%)
+                  </span>
+                )}
               </div>
 
               {t.detail && (

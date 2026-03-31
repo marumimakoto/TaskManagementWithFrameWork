@@ -15,9 +15,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const db = await getDb();
   const rows = await db.all<{
     id: string; title: string; est_min: number; recurrence: string; detail: string;
-    deadline_offset_days: number | null; enabled: number; created_at: number;
+    deadline_offset_days: number | null; enabled: number;
+    generated_count: number; completed_count: number; created_at: number;
   }>(
-    'SELECT id, title, est_min, recurrence, detail, deadline_offset_days, enabled, created_at FROM recurring_rules WHERE user_id = ? AND enabled = 1 ORDER BY created_at DESC', userId
+    'SELECT id, title, est_min, recurrence, detail, deadline_offset_days, enabled, generated_count, completed_count, created_at FROM recurring_rules WHERE user_id = ? AND enabled = 1 ORDER BY created_at DESC', userId
   );
 
   const result = rows.map((row) => ({
@@ -27,6 +28,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     recurrence: row.recurrence,
     detail: row.detail || undefined,
     deadlineOffsetDays: row.deadline_offset_days,
+    generatedCount: row.generated_count ?? 0,
+    completedCount: row.completed_count ?? 0,
     createdAt: row.created_at,
   }));
 

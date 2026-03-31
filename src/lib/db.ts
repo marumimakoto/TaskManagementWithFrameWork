@@ -242,6 +242,8 @@ async function initializeTables(c: Client): Promise<void> {
       recurrence TEXT NOT NULL,
       deadline_offset_days INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,
+      generated_count INTEGER NOT NULL DEFAULT 0,
+      completed_count INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,
     `CREATE TABLE IF NOT EXISTS bucket_categories (

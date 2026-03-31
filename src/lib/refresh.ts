@@ -192,6 +192,8 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     );
     existingTitles.add(rule.title);
     addedCount++;
+    // 生成カウントをインクリメント
+    await db.run('UPDATE recurring_rules SET generated_count = generated_count + 1 WHERE id = ?', rule.id);
   }
 
   // 2. 完了タスクをアーカイブに移動して削除（繰り返し生成の後に実行）
@@ -204,6 +206,13 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
       'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now
     );
+    // 繰り返しルールの達成カウントをインクリメント
+    if (t.recurrence && t.recurrence !== 'carry') {
+      await db.run(
+        'UPDATE recurring_rules SET completed_count = completed_count + 1 WHERE user_id = ? AND title = ? AND enabled = 1',
+        t.user_id, t.title
+      );
+    }
     await db.run('DELETE FROM todos WHERE id = ?', t.id);
   }
 

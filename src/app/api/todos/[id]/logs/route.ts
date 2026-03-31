@@ -91,3 +91,29 @@ export async function POST(
 
   return NextResponse.json(log);
 }
+
+/**
+ * 作業ログを削除する
+ * @param request - { logId } を含むJSONリクエスト
+ * @returns 成功時 { ok: true }
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  try {
+    const body: { logId?: string } = await request.json();
+    const { logId } = body;
+    if (!logId) {
+      return NextResponse.json({ error: 'logId is required' }, { status: 400 });
+    }
+
+    const db = await getDb();
+    await db.run('DELETE FROM work_logs WHERE id = ?', logId);
+
+    return NextResponse.json({ ok: true });
+  } catch (e: unknown) {
+    const message: string = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
