@@ -543,7 +543,7 @@ export default function TaskSetPanel({
                   </span>
                 )}
                 <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>
-                  ({set.items.length}件)
+                  ({set.items.length}件 / 合計{set.items.reduce((sum: number, item: { estMin: number }) => sum + (item.estMin || 0), 0)}分)
                 </span>
               </span>
               <div className={styles.diaryActions} onClick={(e) => e.stopPropagation()}>

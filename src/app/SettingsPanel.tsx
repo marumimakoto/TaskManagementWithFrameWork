@@ -212,6 +212,21 @@ export default function SettingsPanel({
         </div>
       </section>
 
+      {/* 執事の表示 */}
+      <section className={styles.settingsSection}>
+        <h3 className={styles.settingsSectionTitle}>執事アバター</h3>
+        <div className={styles.settingsRow}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input
+              type="checkbox"
+              checked={localSettings.showButler !== false}
+              onChange={(e) => updateSetting({ showButler: e.target.checked })}
+            />
+            執事を表示する
+          </label>
+        </div>
+      </section>
+
       {/* Welcomeメッセージ */}
       <section className={styles.settingsSection}>
         <h3 className={styles.settingsSectionTitle}>Welcomeメッセージ</h3>

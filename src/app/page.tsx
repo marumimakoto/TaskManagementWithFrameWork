@@ -2135,6 +2135,25 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         <h1 className={styles.headerTitle}>
           {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
         </h1>
+        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }}>
+          {activeTab === 'tasks' ? 'タスクの追加・編集・完了管理' :
+           activeTab === 'today' ? '今日やるタスクを選んで集中する' :
+           activeTab === 'calendar' ? '期限のあるタスクを月間カレンダーで確認' :
+           activeTab === 'task-sets' ? 'タスクのテンプレートを作成・管理' :
+           activeTab === 'matrix' ? '緊急性と重要性でタスクを整理' :
+           activeTab === 'activity' ? '作業ログ・統計・パレート分析' :
+           activeTab === 'archived' ? '削除したタスクの復元' :
+           activeTab === 'diary-write' ? 'その日の出来事を記録' :
+           activeTab === 'diary-view' ? '過去の日記を検索・閲覧' :
+           activeTab === 'diary-public' ? '他のユーザーの公開日記を閲覧' :
+           activeTab === 'bucket-list' ? '人生でやりたいことを管理' :
+           activeTab === 'mypage' ? 'プロフィール・パスワードの変更' :
+           activeTab === 'help' ? '使い方ガイドとハンズオン' :
+           activeTab === 'bug-report' ? '不具合の報告と確認' :
+           activeTab === 'admin' ? '管理者用ダッシュボード' :
+           activeTab === 'recurring' ? '繰り返しルールの管理・達成率' :
+           activeTab === 'settings' ? '表示・執事・Welcomeの設定' : ''}
+        </p>
         <div className={styles.userBar}>
           <span className={styles.userName}>{user.name}</span>
           <button type="button" onClick={onLogout} className={styles.iconBtn}>
@@ -3837,7 +3856,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         />
       )}
 
-      <ButlerAvatar todos={todos} settings={settings} />
+      {settings.showButler !== false && (
+        <ButlerAvatar todos={todos} settings={settings} />
+      )}
 
       {/* ハンズオン補助吹き出し */}
       {tutorialHint && (

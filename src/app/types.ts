@@ -124,6 +124,8 @@ export type UserSettings = {
   butlerMaxChars: number;
   /** ウェルカムメッセージのカテゴリ */
   welcomeTone: string;
+  /** 執事を表示するか */
+  showButler: boolean;
 };
 
 /** UserSettingsのデフォルト値 */
@@ -135,6 +137,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   butlerPrompt: 'ユーザーを励ませ',
   butlerMaxChars: 80,
   welcomeTone: 'trivia',
+  showButler: true,
 };
 
 /**
