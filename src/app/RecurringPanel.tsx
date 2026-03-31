@@ -107,17 +107,23 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
 
   /** 繰り返し設定を解除する（carry に戻す） */
   async function removeRecurrence(id: string): Promise<void> {
+    // 楽観的更新：即座にリストから削除
+    setItems((prev) => prev.filter((item) => item.id !== id));
+    showMsg('繰り返しを解除しました');
     try {
-      await fetch('/api/todos/recurring', {
+      const res: Response = await fetch('/api/todos/recurring', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      await fetchItems();
+      if (!res.ok) {
+        // 失敗時はリストを再取得
+        await fetchItems();
+      }
       onRefresh();
-      showMsg('繰り返しを解除しました');
     } catch (e) {
       console.error('Failed to remove recurrence', e);
+      await fetchItems();
     }
   }
 
