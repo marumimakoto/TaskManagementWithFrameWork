@@ -211,6 +211,25 @@ export default function SettingsPanel({
           </div>
         </div>
       </section>
+
+      {/* Welcomeメッセージ */}
+      <section className={styles.settingsSection}>
+        <h3 className={styles.settingsSectionTitle}>Welcomeメッセージ</h3>
+        <div className={styles.settingsRow}>
+          <label className={styles.fieldLabel}>メッセージのトーン</label>
+          <select
+            value={localSettings.welcomeTone ?? 'trivia'}
+            onChange={(e) => updateSetting({ welcomeTone: e.target.value })}
+            className={styles.input}
+          >
+            <option value="trivia">豆知識</option>
+            <option value="beauty">美容</option>
+            <option value="mindset">マインドセット</option>
+            <option value="productivity">生産性</option>
+            <option value="history">歴史</option>
+          </select>
+        </div>
+      </section>
     </div>
   );
 }

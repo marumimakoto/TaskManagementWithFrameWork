@@ -12,6 +12,7 @@ interface SettingsRow {
   butler_avatar: string;
   butler_prompt: string;
   butler_max_chars: number;
+  welcome_tone: string;
 }
 
 /**
@@ -25,6 +26,7 @@ function rowToSettings(row: SettingsRow): UserSettings {
     butlerAvatar: row.butler_avatar,
     butlerPrompt: row.butler_prompt,
     butlerMaxChars: row.butler_max_chars,
+    welcomeTone: row.welcome_tone ?? 'trivia',
   };
 }
 
@@ -62,15 +64,16 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   const db = await getDb();
   await db.run(`
-    INSERT INTO user_settings (user_id, dark_mode, font_size, font_family, butler_avatar, butler_prompt, butler_max_chars)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_settings (user_id, dark_mode, font_size, font_family, butler_avatar, butler_prompt, butler_max_chars, welcome_tone)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       dark_mode = excluded.dark_mode,
       font_size = excluded.font_size,
       font_family = excluded.font_family,
       butler_avatar = excluded.butler_avatar,
       butler_prompt = excluded.butler_prompt,
-      butler_max_chars = excluded.butler_max_chars
+      butler_max_chars = excluded.butler_max_chars,
+      welcome_tone = excluded.welcome_tone
   `,
     userId,
     settings.darkMode ? 1 : 0,
@@ -79,6 +82,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     settings.butlerAvatar ?? '',
     settings.butlerPrompt ?? 'ユーザーを励ませ',
     settings.butlerMaxChars ?? 80,
+    settings.welcomeTone ?? 'trivia',
   );
 
   return NextResponse.json({ ok: true });

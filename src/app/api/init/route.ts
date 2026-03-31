@@ -49,6 +49,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       butlerAvatar: settingsRow.butler_avatar ?? '',
       butlerPrompt: settingsRow.butler_prompt ?? 'ユーザーを励ませ',
       butlerMaxChars: settingsRow.butler_max_chars ?? 80,
+      welcomeTone: settingsRow.welcome_tone ?? 'trivia',
     } : null;
 
     // 購入状態（管理者チェック含む）

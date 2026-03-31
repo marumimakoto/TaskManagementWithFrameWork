@@ -45,69 +45,16 @@ const CalendarPanel = dynamic(() => import('./CalendarPanel'));
  * ページのルートコンポーネント
  * ログイン状態を管理し、未ログインならログイン/登録画面、ログイン済みならTodoAppを表示する
  */
-/** Welcomeページで表示する執事のメッセージ一覧 */
-const WELCOME_MESSAGES: string[] = [
-  '朝に太陽光を浴びると体内時計が整う。5分でも外に出ると、集中力が上がりやすい',
-  'やる気は行動の後に出る。脳は動いた後に「やる気」を作る仕組みになっている',
-  '人は最初の3分を乗り越えると作業が続きやすい。まず3分だけやると決める',
-  '朝に水を一杯飲むと代謝が上がる。寝起きのぼんやりも改善しやすい',
-  'タスクは細かく分けるほど着手しやすい。「5分でできる形」にすると進む',
-  '目標を書くと達成率が上がる。言語化で脳が優先度を認識するため',
-  '姿勢を正すだけで集中力は上がる。脳への血流が改善されるから',
-  '前日にやることを1つ決めると迷わない。朝の意思決定を減らせる',
-  '軽い運動はストレスを減らす。10分の散歩でも気分がリセットされる',
-  'スマホ通知を減らすと集中力が回復する。注意の分断を防げる',
-  'タコの心臓は3つある。うち2つはエラに血を送るための専用ポンプとして働く',
-  'バナナは果物ではなく草の一種。木に見えるが、実は巨大な草本植物である',
-  '人間の体内には約37兆個の細胞がある。日々入れ替わりながら生命を維持する',
-  '雷の温度は太陽の表面より高い。瞬間的に約3万度にも達するとされる',
-  'ペンギンは寒さに強いが暑さに弱い。種類によっては温暖な地域にも生息する',
-  'シャチはイルカの仲間。見た目はクジラに近いが、分類上はイルカ科に属する',
-  '蜂蜜は腐らない食品として知られる。水分が少なく、菌が繁殖しにくい',
-  'エベレストは、地球のプレートの隆起によって、毎年数ミリずつ高くなる。',
-  '人は寝ている間にコップ一杯分の汗をかく。体温調整のため無意識に行われる',
-  '宇宙では音は伝わらない。空気がないため、振動を伝える媒体が存在しない',
-  'クジラは意識的に呼吸する。眠っても完全に眠らず、片脳ずつ休ませる',
-  '人間の脳は約60％が脂肪でできている。体の中でも特に脂質の多い器官',
-  'カメレオンは背景に合わせて色を変えるだけでなく、感情でも色が変わる',
-  'サメには骨がない。体はすべて軟骨でできており、軽くてしなやかに動ける',
-  '北極と南極では気温が大きく違う。南極の方がはるかに寒い環境である',
-  '人は1日に約2万回呼吸する。意識しなくても体は常に働き続けている',
-  '鉛筆の芯は鉛ではない。黒鉛と粘土を混ぜたものが使われている',
-  '蝶は足で味を感じる。花に止まると同時に味を確認している',
-  '富士山は今も活火山である。最後の噴火は1707年の宝永噴火',
-  '水は4度のとき最も重くなる。この性質が湖の生態系を守っている',
-  '人の血管をすべてつなぐと約10万kmになる。地球を2周以上できる長さ',
-  'キリンの首の骨は7個。人間と同じ数だが、一つ一つが非常に長い',
-  '月は毎年少しずつ地球から遠ざかる。年間で約3.8センチ離れている',
-  'ゴリラは風邪をひくことがある。人間と似たウイルスに感染するため',
-  '砂糖はもともと薬として使われていた。昔は非常に高価で貴重な存在',
-  'タツノオトシゴはオスが出産する。メスから卵を受け取り体内で育てる',
-  '人は夢を一晩に何度も見る。覚えていないだけで複数回経験している',
-  '火星の夕焼けは青い。大気中の塵の影響で地球とは逆の色になる',
-  'カラスは非常に知能が高い。道具を使ったり、人の顔を覚えたりできる',
-  '人間は海水を飲めないが、魚は飲んでいる。体内で塩分を排出する仕組みがある',
-  '朝に最優先タスクを1つ終えると、その日全体の達成感が高まりやすい',
-  '集中力は25分が目安。短く区切ると疲れにくく、作業効率も維持できる',
-  '作業前に机を整えると、注意散漫を防げる。環境は思考に直結する',
-  '「やらないこと」を決めると、重要な作業に時間を使いやすくなる',
-  '同じ時間に起きると生活リズムが安定する。休日も大きく崩さない',
-  'タスクは紙に書くと記憶に残る。視覚化で抜け漏れも防ぎやすい',
-  '小さく始めると継続しやすい。ハードルを下げるのが習慣化のコツ',
-  'こまめな休憩は集中力を回復させる。長時間の連続作業は逆効果',
-  '決断の回数を減らすと疲れにくい。服や昼食を固定化するのも有効',
-  '一日の終わりに振り返ると改善が進む。次にやることも明確になる',
-  '玉ねぎは繊維に沿って切ると食感が残る。逆に切ると甘みが出やすい',
-  '肉は焼く30分前に常温に戻すと、火が均一に通りやすくなる',
-  'パスタは塩をしっかり入れると味が締まる。海水程度が目安',
-  '野菜は切ってから洗わない。栄養や旨味が水に流れやすくなる',
-  '卵は常温の方がきれいに焼ける。冷たいままだと焼きムラが出やすい',
-  'フライパンは十分に熱してから油を入れると、食材がくっつきにくい',
-  '味見は途中で何度もする。最後だけだと調整が難しくなる',
-  '魚は焼く前に水分を拭くと臭みが減り、皮もパリッと仕上がる',
-  '煮物は一度冷ますと味が染みる。温度が下がるときに吸収が進む',
-  'にんにくは焦がすと苦くなる。弱火で香りを出すのがポイント',
-];
+import { WELCOME_MESSAGES } from './welcomeMessages';
+
+/** Welcomeメッセージをトーン設定に基づいて取得する */
+function pickWelcomeMessage(tone: string): string {
+  const messages: string[] = WELCOME_MESSAGES[tone] ?? WELCOME_MESSAGES['trivia'] ?? [];
+  if (messages.length === 0) {
+    return '今日も頑張りましょう！';
+  }
+  return messages[Math.floor(Math.random() * messages.length)];
+}
 
 export default function Page(): React.ReactElement {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -126,7 +73,16 @@ export default function Page(): React.ReactElement {
       setUser(saved);
       if (!welcomeTriggeredRef.current) {
         welcomeTriggeredRef.current = true;
-        const msg: string = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+        // settingsはTodoApp内のstateなのでlocalStorageから直接取得
+        let tone: string = 'trivia';
+        try {
+          const cachedSettings: string | null = localStorage.getItem('kiroku:settings:' + saved.id);
+          if (cachedSettings) {
+            const parsed = JSON.parse(cachedSettings);
+            tone = parsed.welcomeTone ?? 'trivia';
+          }
+        } catch { /* ignore */ }
+        const msg: string = pickWelcomeMessage(tone);
         setWelcomeMessage(msg);
         setShowWelcome(true);
         setTimeout(() => setWelcomeFading(true), 2000);
@@ -167,7 +123,7 @@ export default function Page(): React.ReactElement {
 
   /** Welcome画面を表示してタイマーで自動フェードアウトする */
   function triggerWelcome(): void {
-    const msg: string = WELCOME_MESSAGES[Math.floor(Math.random() * WELCOME_MESSAGES.length)];
+    const msg: string = pickWelcomeMessage('trivia');
     setWelcomeMessage(msg);
     setShowWelcome(true);
     setWelcomeFading(false);

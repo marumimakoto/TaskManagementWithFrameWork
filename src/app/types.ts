@@ -122,6 +122,8 @@ export type UserSettings = {
   butlerPrompt: string;
   /** 執事の吹き出し最大文字数 */
   butlerMaxChars: number;
+  /** ウェルカムメッセージのカテゴリ */
+  welcomeTone: string;
 };
 
 /** UserSettingsのデフォルト値 */
@@ -132,6 +134,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   butlerAvatar: '',
   butlerPrompt: 'ユーザーを励ませ',
   butlerMaxChars: 80,
+  welcomeTone: 'trivia',
 };
 
 /**
