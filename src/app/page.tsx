@@ -39,6 +39,7 @@ const HelpPanel = dynamic(() => import('./HelpPanel'));
 const BugReportPanel = dynamic(() => import('./BugReportPanel'));
 const AdminPanel = dynamic(() => import('./AdminPanel'));
 const TodayPanel = dynamic(() => import('./TodayPanel'));
+const CalendarPanel = dynamic(() => import('./CalendarPanel'));
 
 /**
  * ページのルートコンポーネント
@@ -336,7 +337,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  const [activeTab, setActiveTab] = useState<'tasks' | 'today' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
@@ -2176,7 +2177,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
       <header className={styles.topBar}>
         <h1 className={styles.headerTitle}>
-          {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
+          {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
         </h1>
         <div className={styles.userBar}>
           <span className={styles.userName}>{user.name}</span>
@@ -2344,7 +2345,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         </div>
       )}
 
-      {(activeTab === 'tasks' || activeTab === 'today' || activeTab === 'task-sets' || activeTab === 'recurring') && (
+      {(activeTab === 'tasks' || activeTab === 'today' || activeTab === 'calendar' || activeTab === 'task-sets' || activeTab === 'recurring') && (
       <>
       <div className={styles.diaryModeBar}>
         <button
@@ -2360,6 +2361,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           onClick={() => setActiveTab('today')}
         >
           今日
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${activeTab === 'calendar' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setActiveTab('calendar')}
+        >
+          カレンダー
         </button>
         <button
           type="button"
@@ -3757,6 +3765,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             });
           }}
         />
+      )}
+
+      {activeTab === 'calendar' && (
+        <CalendarPanel todos={todos} />
       )}
 
       {activeTab === 'archived' && (
