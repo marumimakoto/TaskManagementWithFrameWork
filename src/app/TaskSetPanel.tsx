@@ -42,9 +42,11 @@ interface PublicTaskSet {
  */
 export default function TaskSetPanel({
   user,
+  categories = [],
   onApply,
 }: {
   user: AppUser;
+  categories?: { id: string; name: string }[];
   onApply: (items: { title: string; estMin: number; detail?: string; recurrence: string; deadline?: string }[]) => void;
 }): React.ReactElement {
   const [sets, setSets] = useState<TaskSet[]>([]);

@@ -83,25 +83,29 @@ export async function PUT(
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
   }
 
+  // UPDATE前に旧データを取得（繰り返し設定の変更判定用）
+  const oldTodo = updates.recurrence !== undefined
+    ? await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null; recurrence: string }>(
+        'SELECT user_id, title, est_min, detail, deadline, recurrence FROM todos WHERE id = ?', id
+      )
+    : null;
+
   values.push(id);
   await db.run(`UPDATE todos SET ${fields.join(', ')} WHERE id = ?`, ...values);
 
   // 繰り返し設定が変更された場合、recurring_rulesを更新
-  if (updates.recurrence !== undefined) {
-    const todo = await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null; recurrence: string }>(
-      'SELECT user_id, title, est_min, detail, deadline, recurrence FROM todos WHERE id = ?', id
-    );
-    if (todo && updates.recurrence !== todo.recurrence) {
+  if (updates.recurrence !== undefined && oldTodo) {
+    if (updates.recurrence !== oldTodo.recurrence) {
       // 繰り返し設定が実際に変わった場合のみ、既存ルール（同タイトル）を無効化
       await db.run(
         'UPDATE recurring_rules SET enabled = 0 WHERE user_id = ? AND title = ?',
-        todo.user_id, todo.title
+        oldTodo.user_id, oldTodo.title
       );
       // 新しいルールがcarry以外なら登録
       if (updates.recurrence !== 'carry') {
         // 期限オフセット: 期限が設定されていれば「期限 - 今日」の日数を保存
         let deadlineOffsetDays: number | null = null;
-        const currentDeadline: number | null = updates.deadline !== undefined ? (updates.deadline as number | null) : todo.deadline;
+        const currentDeadline: number | null = updates.deadline !== undefined ? (updates.deadline as number | null) : oldTodo.deadline;
         if (currentDeadline) {
           const nowDate: Date = new Date();
           nowDate.setHours(0, 0, 0, 0);
@@ -115,7 +119,7 @@ export async function PUT(
         const ruleId: string = crypto.randomUUID();
         await db.run(
           'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          ruleId, todo.user_id, todo.title, todo.est_min, todo.detail, updates.recurrence, deadlineOffsetDays
+          ruleId, oldTodo.user_id, oldTodo.title, oldTodo.est_min, oldTodo.detail, updates.recurrence, deadlineOffsetDays
         );
       }
     }

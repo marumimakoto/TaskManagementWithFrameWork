@@ -3586,6 +3586,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       {activeTab === 'task-sets' && (
         <TaskSetPanel
           user={user}
+          categories={todoCategories}
           onApply={async (items) => {
             const minOrder: number = todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) : 0;
             for (let i: number = 0; i < items.length; i++) {
