@@ -608,7 +608,24 @@ export default function TaskSetPanel({
                         className={styles.input}
                       />
                     </div>
-                    {/* 繰り返し設定はタスクセットでは無効（常にcarry） */}
+                    {/* カテゴリ選択 */}
+                    {categories.length > 0 && (
+                      <div>
+                        <label className={styles.fieldLabel}>カテゴリ</label>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+                          {categories.map((cat) => (
+                            <button
+                              key={cat.id}
+                              type="button"
+                              onClick={() => {/* TODO: カテゴリstate */}}
+                              style={{ padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer', border: '1px solid var(--card-border)', background: 'var(--card-bg)', color: 'var(--foreground)' }}
+                            >
+                              {cat.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <div>
                       <label className={styles.fieldLabel}>期限（X日後）</label>
                       <input
