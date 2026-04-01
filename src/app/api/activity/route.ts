@@ -240,8 +240,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // 日別の作業時間合計（work_logsベース — リフレッシュの影響を受けない）
-  // work_logsのcontentから分数を抽出して日別に集計
+  // 日別の作業時間 + カテゴリ内訳（work_logsベース — 1回のクエリで両方集計）
+  const dailyCategoryStats: { date: string; total: number; byCategory: Record<string, number> }[] = [];
   {
     let wlQuery: string = `
       SELECT w.date, w.content, w.todo_id
@@ -261,19 +261,34 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
     const wlRows = await db.all<{ date: string; content: string; todo_id: string }>(wlQuery, ...wlParams);
 
+    const dcMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
     for (const row of wlRows) {
-      // contentから分数を抽出（例: "+25分 作業しました" → 25）
       const minMatch: RegExpMatchArray | null = row.content.match(/\+?(\d+)分/);
       const minutes: number = minMatch ? parseInt(minMatch[1], 10) : 0;
       if (minutes <= 0) {
         continue;
       }
+      // dailyStats の workedMin に加算
       let stat = statsMap.get(row.date);
       if (!stat) {
         stat = { workLogs: 0, created: 0, completed: 0, deleted: 0, workedMin: 0 };
         statsMap.set(row.date, stat);
       }
       stat.workedMin += minutes;
+
+      // カテゴリ内訳
+      const cat: string = catMap.get(row.todo_id) || '未分類';
+      let dcEntry = dcMap.get(row.date);
+      if (!dcEntry) {
+        dcEntry = { total: 0, byCategory: {} };
+        dcMap.set(row.date, dcEntry);
+      }
+      dcEntry.total += minutes;
+      dcEntry.byCategory[cat] = (dcEntry.byCategory[cat] ?? 0) + minutes;
+    }
+    const dcSorted: string[] = [...dcMap.keys()].sort();
+    for (const d of dcSorted) {
+      dailyCategoryStats.push({ date: d, ...dcMap.get(d)! });
     }
   }
 
@@ -285,75 +300,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     dailyStats.push({ date: d, ...stat });
   }
 
-  // パレート分析用: タスクごとの実績時間集計
-  const paretoQuery: string = range
-    ? 'SELECT id, title, actual_min FROM todos WHERE user_id = ? AND actual_min > 0 AND last_worked_at BETWEEN ? AND ?'
-    : 'SELECT id, title, actual_min FROM todos WHERE user_id = ? AND actual_min > 0';
-  const paretoParams: (string | number)[] = [userId];
-  if (range) {
-    paretoParams.push(range.start, range.end);
-  }
-  // アーカイブも含める
-  const paretoQueryArchived: string = range
-    ? 'SELECT id, title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0 AND archived_at BETWEEN ? AND ?'
-    : 'SELECT id, title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0';
+  // パレート分析用: タスクごとの実績時間集計（todosとアーカイブをUNIONで1クエリ）
+  const paretoAllQuery: string = range
+    ? `SELECT title, actual_min FROM todos WHERE user_id = ? AND actual_min > 0 AND last_worked_at BETWEEN ? AND ?
+       UNION ALL
+       SELECT title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0 AND archived_at BETWEEN ? AND ?`
+    : `SELECT title, actual_min FROM todos WHERE user_id = ? AND actual_min > 0
+       UNION ALL
+       SELECT title, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0`;
+  const paretoParams: (string | number)[] = range
+    ? [userId, range.start, range.end, userId, range.start, range.end]
+    : [userId, userId];
+  const paretoRows = await db.all<{ title: string; actual_min: number }>(paretoAllQuery, ...paretoParams);
 
-  const activeTasks = await db.all<{ id: string; title: string; actual_min: number }>(paretoQuery, ...paretoParams);
-  const archivedTasks = await db.all<{ id: string; title: string; actual_min: number }>(paretoQueryArchived, ...paretoParams);
-
-  // タイトルで集約（同名タスクの実績を合算）
   const paretoMap: Map<string, number> = new Map();
-  for (const t of [...activeTasks, ...archivedTasks]) {
+  for (const t of paretoRows) {
     paretoMap.set(t.title, (paretoMap.get(t.title) ?? 0) + t.actual_min);
   }
   const paretoData: { title: string; actualMin: number }[] = [...paretoMap.entries()]
     .map(([title, actualMin]) => ({ title, actualMin }))
     .sort((a, b) => b.actualMin - a.actualMin);
-
-  // 日別×カテゴリの作業時間（work_logsベース — 折れ線グラフ用）
-  const dailyCategoryStats: { date: string; total: number; byCategory: Record<string, number> }[] = [];
-  try {
-    let dcQuery: string = `
-      SELECT w.date, w.content, w.todo_id
-      FROM work_logs w
-      LEFT JOIN todos t ON w.todo_id = t.id
-      LEFT JOIN archived_todos a ON w.todo_id = a.id
-      WHERE (t.user_id = ? OR a.user_id = ?)
-    `;
-    const dcParams: (string | number)[] = [userId, userId];
-    if (from) {
-      dcQuery += ' AND w.date >= ?';
-      dcParams.push(from);
-    }
-    if (to) {
-      dcQuery += ' AND w.date <= ?';
-      dcParams.push(to);
-    }
-    const dcRows = await db.all<{ date: string; content: string; todo_id: string }>(dcQuery, ...dcParams);
-
-    const dcMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
-    for (const row of dcRows) {
-      const minMatch: RegExpMatchArray | null = row.content.match(/\+?(\d+)分/);
-      const minutes: number = minMatch ? parseInt(minMatch[1], 10) : 0;
-      if (minutes <= 0) {
-        continue;
-      }
-      const cat: string = catMap.get(row.todo_id) || '未分類';
-      let entry = dcMap.get(row.date);
-      if (!entry) {
-        entry = { total: 0, byCategory: {} };
-        dcMap.set(row.date, entry);
-      }
-      entry.total += minutes;
-      entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + minutes;
-    }
-    const dcSorted: string[] = [...dcMap.keys()].sort();
-    for (const d of dcSorted) {
-      dailyCategoryStats.push({ date: d, ...dcMap.get(d)! });
-    }
-  } catch (e) {
-    console.warn('[activity] dailyCategoryStats failed:', e);
-  }
 
   return NextResponse.json({ entries, dailyStats, paretoData, dailyCategoryStats });
 }

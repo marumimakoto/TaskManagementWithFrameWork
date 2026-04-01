@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { UserSettings } from './types';
 import { log } from './utils';
 import styles from './page.module.css';
@@ -31,25 +31,33 @@ export default function SettingsPanel({
 }): React.ReactElement {
   const [localSettings, setLocalSettings] = useState<UserSettings>(settings);
   const [msg, setMsg] = useState<string>('');
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestRef = useRef<UserSettings>(settings);
 
   /**
-   * 設定を変更し、即座にAPIに保存する
+   * 設定を変更する。UIは即時反映し、API保存は300msのdebounceでまとめる
    * @param patch - 変更するフィールド
    */
-  async function updateSetting(patch: Partial<UserSettings>): Promise<void> {
-    const updated: UserSettings = { ...localSettings, ...patch };
+  function updateSetting(patch: Partial<UserSettings>): void {
+    const updated: UserSettings = { ...latestRef.current, ...patch };
+    latestRef.current = updated;
     setLocalSettings(updated);
     onUpdate(updated);
 
-    await fetch('/api/settings', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, settings: updated }),
-    });
-
-    setMsg('保存しました');
-    window.setTimeout(() => setMsg(''), 2000);
-    log('settings:update', patch);
+    // 既存のタイマーをキャンセルして再スケジュール
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+    }
+    saveTimerRef.current = setTimeout(() => {
+      fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId, settings: latestRef.current }),
+      });
+      setMsg('保存しました');
+      window.setTimeout(() => setMsg(''), 2000);
+      log('settings:update', patch);
+    }, 300);
   }
 
   return (
