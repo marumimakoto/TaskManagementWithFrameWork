@@ -88,17 +88,20 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
           fetch('/api/todos/archive?userId=' + user.id),
           fetch('/api/todo-categories?userId=' + user.id),
         ]);
-        const todos = await todosRes.json();
-        const archived = await archiveRes.json();
+        const todosRaw = await todosRes.json();
+        const archivedRaw = await archiveRes.json();
+        const todos: Record<string, unknown>[] = Array.isArray(todosRaw) ? todosRaw : [];
+        const archived: Record<string, unknown>[] = Array.isArray(archivedRaw) ? archivedRaw : [];
 
         // ユーザー定義カテゴリ一覧を取得
-        const catList: { id: string; name: string }[] = Array.isArray(await catListRes.clone().json()) ? await catListRes.json() : [];
+        const catListRaw = await catListRes.json();
+        const catList: { id: string; name: string }[] = Array.isArray(catListRaw) ? catListRaw : [];
         const userCategories: string[] = catList.map((c: { id: string; name: string }) => c.name);
 
         const catMap: Map<string, number> = new Map();
         for (const t of [...todos, ...archived]) {
-          const cat: string = t.category || '未分類';
-          catMap.set(cat, (catMap.get(cat) ?? 0) + (t.actualMin ?? 0));
+          const cat: string = (t.category as string) || '未分類';
+          catMap.set(cat, (catMap.get(cat) ?? 0) + ((t.actualMin as number) ?? 0));
         }
         const catData: { category: string; totalMin: number }[] = [...catMap.entries()]
           .map(([category, totalMin]) => ({ category, totalMin }))
@@ -116,18 +119,21 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         // 日別×カテゴリの集計
         const dailyMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
         const pad = (n: number): string => String(n).padStart(2, '0');
-        for (const t of [...todos, ...archived]) {
-          const actualMin: number = t.actualMin ?? 0;
+        const allTasks: Record<string, unknown>[] = [...todos, ...archived];
+        console.log('[activity-debug] allTasks:', allTasks.length, 'todos:', todos.length, 'archived:', archived.length,
+          'sample:', allTasks.slice(0, 3).map((t) => ({ title: t.title, actualMin: t.actualMin, lastWorkedAt: t.lastWorkedAt, createdAt: t.createdAt })));
+        for (const t of allTasks) {
+          const actualMin: number = (t.actualMin as number) ?? 0;
           if (actualMin <= 0) {
             continue;
           }
-          const ts: number = t.lastWorkedAt ?? t.archivedAt ?? t.createdAt ?? Date.now();
+          const ts: number = (t.lastWorkedAt as number) ?? (t.archivedAt as number) ?? (t.createdAt as number) ?? Date.now();
           if (!ts) {
             continue;
           }
           const d: Date = new Date(ts);
           const dateKey: string = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-          const cat: string = t.category || '未分類';
+          const cat: string = (t.category as string) || '未分類';
           let entry = dailyMap.get(dateKey);
           if (!entry) {
             entry = { total: 0, byCategory: {} };
