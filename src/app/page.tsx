@@ -3455,7 +3455,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'deadline'); }}
                   title="ダブルクリックで期限を編集"
                 >
-                  ⏰ {formatDeadline(t.deadline)}
+                  <span style={{ color: t.deadline && t.deadline < Date.now() && !t.done ? '#ef4444' : undefined }}>⏰ {formatDeadline(t.deadline)}</span>
                   {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
                     <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>作成: {formatDateShort(t.createdAt)}</span>
                   )}
@@ -3595,6 +3595,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   ) : (
                     <span
                       className={styles.compactDeadline}
+                      style={{ color: t.deadline && t.deadline < Date.now() && !t.done ? '#ef4444' : undefined }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setEditingId(t.id);
@@ -3666,6 +3667,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 ) : (
                   <span
                     className={styles.compactDeadline}
+                    style={{ color: t.deadline && t.deadline < Date.now() && !t.done ? '#ef4444' : undefined }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingId(t.id);
@@ -3727,7 +3729,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
               </div>
               {t.deadline && (
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, paddingLeft: 30 }}>
+                <div style={{ fontSize: 12, color: t.deadline < Date.now() && !t.done ? '#ef4444' : 'var(--muted)', marginTop: 4, paddingLeft: 30 }}>
                   期限: {formatDeadline(t.deadline)}
                 </div>
               )}
