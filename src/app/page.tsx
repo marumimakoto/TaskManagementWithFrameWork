@@ -294,7 +294,21 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  const [activeTab, setActiveTab] = useState<'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin'>('tasks');
+  type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
+  const VALID_TABS: Set<string> = new Set(['tasks', 'today', 'calendar', 'task-sets', 'matrix', 'activity', 'category-stats', 'archived', 'recurring', 'diary-write', 'diary-view', 'diary-public', 'bucket-list', 'mypage', 'settings', 'help', 'bug-report', 'admin']);
+  const [activeTab, setActiveTabRaw] = useState<TabType>(() => {
+    try {
+      const saved: string | null = localStorage.getItem('kiroku:activeTab');
+      if (saved && VALID_TABS.has(saved)) {
+        return saved as TabType;
+      }
+    } catch { /* ignore */ }
+    return 'tasks';
+  });
+  function setActiveTab(tab: TabType): void {
+    setActiveTabRaw(tab);
+    try { localStorage.setItem('kiroku:activeTab', tab); } catch { /* ignore */ }
+  }
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
   const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
