@@ -2679,38 +2679,29 @@
     gap: 6px;
   }
 
-  /* タスクカード: 2行レイアウト */
-  /* 1行目: チェック+タイトル */
-  /* 2行目: 予定実績+期限+バッジ+入力+ボタン（全て横並び） */
+  /* タスクカード: PC版と同じ1行横並び */
   .card {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    grid-template-rows: auto auto;
-    gap: 2px 6px;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
     padding: 4px 6px;
-    font-size: 13px;
+    font-size: 12px;
     max-width: 100%;
     overflow: hidden;
   }
 
-  /* チェックボックスは1行目左 */
-  .card > input[type="checkbox"] {
-    grid-row: 1;
-    grid-column: 1;
-    align-self: center;
-  }
-
-  /* タイトル部分は1行目右 */
   .cardLeft {
-    grid-row: 1;
-    grid-column: 2;
-    flex-direction: column;
-    gap: 0;
+    flex: 1;
     min-width: 0;
+    flex-direction: row;
+    gap: 4px;
+    align-items: baseline;
   }
 
   .cardLeftTitle {
     min-width: 0;
+    flex-shrink: 1;
   }
 
   .taskTitle {
@@ -2721,10 +2712,11 @@
     padding: 0 !important;
   }
 
-  /* 予定/実績はcardLeftの中ではなく2行目に移動 */
   .taskProgress {
     font-size: 11px !important;
     padding: 0 !important;
+    white-space: nowrap;
+    flex-shrink: 0;
   }
 
   /* 詳細は展開時のみ */
@@ -2736,27 +2728,25 @@
     display: block !important;
     font-size: 12px !important;
     white-space: normal;
-  }
-
-  /* 期限・バッジ・ボタン等は2行目に横並び */
-  .card > .actions,
-  .card > .taskDeadlineBig,
-  .card > span[class*="badge"] {
-    grid-row: 2;
-  }
-
-  /* actionsを2行目全幅に */
-  .actions {
-    grid-column: 1 / -1;
-    justify-content: flex-end;
-    gap: 4px;
     width: 100%;
+  }
+
+  .taskDeadlineBig {
+    font-size: 12px !important;
+    padding: 2px 4px !important;
+    min-width: auto !important;
+    flex-shrink: 0;
+  }
+
+  .actions {
+    justify-content: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
     flex-wrap: nowrap;
   }
 
   .card {
     padding: 4px 6px !important;
-    gap: 4px !important;
   }
 
   .checkbox {

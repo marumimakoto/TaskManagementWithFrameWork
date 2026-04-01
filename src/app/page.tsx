@@ -3238,6 +3238,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
               </div>
 
+              {/* ステータスバッジ */}
+              <span className={t.done ? styles.badgeOk : t.actualMin > 0 ? styles.badgeOk : styles.badgeNg} style={{ visibility: 'visible' }}>
+                {t.done ? '完了' : t.actualMin > 0 ? '着手' : '未着手'}
+              </span>
+
               {/* 期限 */}
               {isEditingThis && editingField === 'deadline' ? (
                 <div className={styles.taskDeadlineBig} onClick={(e) => e.stopPropagation()}>
@@ -3268,11 +3273,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   ⏰ {formatDeadline(t.deadline)}
                 </div>
               )}
-
-              {/* ステータスバッジ */}
-              <span className={t.done ? styles.badgeOk : t.actualMin > 0 ? styles.badgeOk : styles.badgeNg} style={{ visibility: 'visible' }}>
-                {t.done ? '完了' : t.actualMin > 0 ? '着手' : '未着手'}
-              </span>
 
               {/* Right: actions */}
               <div className={styles.actions}>
