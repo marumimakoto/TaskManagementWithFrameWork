@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
+import { minutesToText } from './utils';
 import styles from './page.module.css';
 import RecurrenceSelector from './RecurrenceSelector';
 
@@ -82,6 +83,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [message, setMessage] = useState<string>('');
   const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
   const [recurringView, setRecurringView] = useState<'rules' | 'stats'>('rules');
+  const [totalActualByTitle, setTotalActualByTitle] = useState<Record<string, number>>({});
   const [calendarFlags, setCalendarFlags] = useState<Record<string, boolean>>(() => {
     try {
       const cached: string | null = localStorage.getItem('kiroku:recurring-calendar:' + user.id);

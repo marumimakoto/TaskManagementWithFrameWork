@@ -168,6 +168,16 @@ export async function DELETE(
         LIMIT -1 OFFSET 100
       )
     `, row.user_id);
+
+    // 完了タスクを削除した場合、繰り返しルールの達成カウントをインクリメント
+    if (row.done === 1) {
+      try {
+        await db.run(
+          'UPDATE recurring_rules SET completed_count = completed_count + 1 WHERE user_id = ? AND title = ? AND enabled = 1',
+          row.user_id, row.title
+        );
+      } catch { /* カラム未追加の場合は無視 */ }
+    }
   }
 
   await db.run('DELETE FROM todos WHERE id = ?', id);
