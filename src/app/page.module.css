@@ -2749,6 +2749,8 @@
 
   .actions {
     gap: 3px;
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .actions .inputNarrow,
@@ -3209,6 +3211,8 @@
 
   .actions {
     gap: 3px;
+    justify-content: flex-end;
+    width: 100%;
   }
 
   .todoListGrid {
