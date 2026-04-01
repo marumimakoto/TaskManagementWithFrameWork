@@ -3116,6 +3116,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
               {/* Title & progress */}
               <div className={styles.cardLeft}>
+                <div className={styles.cardLeftTitle}>
                 {/* タイトル */}
                 {isEditingThis && editingField === 'title' ? (
                   <input
@@ -3174,6 +3175,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     {t.detail || '詳細なし'}
                   </div>
                 )}
+                </div>
 
                 {/* 予定 / 実績 */}
                 <div className={`${styles.taskProgress} ${t.done ? styles.taskProgressDone : ''}`}>
