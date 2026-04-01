@@ -19,6 +19,8 @@ import {
 import styles from './page.module.css';
 import dynamic from 'next/dynamic';
 import ButlerAvatar from './ButlerAvatar';
+import AppHeader from './AppHeader';
+import type { TabType } from './AppHeader';
 import PomodoroTimer from './PomodoroTimer';
 import { DragHandle, MoveButtonBar, DeleteButton } from './SharedComponents';
 import { TUTORIAL_STEPS } from './HelpPanel';
@@ -295,7 +297,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
   const VALID_TABS: Set<string> = new Set(['tasks', 'today', 'calendar', 'task-sets', 'matrix', 'activity', 'category-stats', 'archived', 'recurring', 'diary-write', 'diary-view', 'diary-public', 'bucket-list', 'mypage', 'settings', 'help', 'bug-report', 'admin']);
   const [activeTab, setActiveTabRaw] = useState<TabType>(() => {
     try {
@@ -312,7 +313,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   }
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
-  const [taskMenuOpen, setTaskMenuOpen] = useState<boolean>(false);
   const [tutorialHint, setTutorialHint] = useState<string | null>(null);
   const [tutorialTarget, setTutorialTarget] = useState<string | null>(null);
   const [tutorialPos, setTutorialPos] = useState<{ top: number; left: number } | null>(null);
@@ -2191,196 +2191,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   return (
     <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
-      <header className={styles.topBar}>
-        <div className={styles.headerTitleGroup}>
-        <h1 className={styles.headerTitle}>
-          {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'category-stats' ? 'カテゴリ別実績' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
-        </h1>
-        <p style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 0' }}>
-          {activeTab === 'tasks' ? 'タスクの追加・編集・完了管理' :
-           activeTab === 'today' ? '今日やるタスクを選んで集中する' :
-           activeTab === 'calendar' ? '期限のあるタスクを月間カレンダーで確認' :
-           activeTab === 'task-sets' ? 'タスクのテンプレートを作成・管理' :
-           activeTab === 'matrix' ? '緊急性と重要性でタスクを整理' :
-           activeTab === 'activity' ? '作業ログ・統計・パレート分析' :
-           activeTab === 'category-stats' ? 'カテゴリごとの達成率・作業時間・月別グラフ' :
-           activeTab === 'archived' ? '削除したタスクの復元' :
-           activeTab === 'diary-write' ? 'その日の出来事を記録' :
-           activeTab === 'diary-view' ? '過去の日記を検索・閲覧' :
-           activeTab === 'diary-public' ? '他のユーザーの公開日記を閲覧' :
-           activeTab === 'bucket-list' ? '人生でやりたいことを管理' :
-           activeTab === 'mypage' ? 'プロフィール・パスワードの変更' :
-           activeTab === 'help' ? '使い方ガイドとハンズオン' :
-           activeTab === 'bug-report' ? '不具合の報告と確認' :
-           activeTab === 'admin' ? '管理者用ダッシュボード' :
-           activeTab === 'recurring' ? '繰り返しルールの管理・達成率' :
-           activeTab === 'settings' ? '表示・執事・Welcomeの設定' : ''}
-        </p>
-        </div>
-        <div className={styles.userBar}>
-          <span className={styles.userName}>{user.name}</span>
-          <button type="button" onClick={onLogout} className={styles.iconBtn}>
-            ログアウト
-          </button>
-        </div>
-        <button
-          type="button"
-          className={styles.hamburgerBtn}
-          onClick={() => setMenuOpen(!menuOpen)}
-          aria-label="メニュー"
-        >
-          <span className={styles.hamburgerLine} />
-          <span className={styles.hamburgerLine} />
-          <span className={styles.hamburgerLine} />
-        </button>
-      </header>
-
-      {/* ハンバーガーメニュー */}
-      {menuOpen && (
-        <div className={styles.menuOverlay} onClick={() => setMenuOpen(false)}>
-          <nav className={styles.menuPanel} onClick={(e) => e.stopPropagation()}>
-            {/* --- タスク管理グループ --- */}
-            <div className={styles.menuGroupLabel}>タスク管理</div>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'tasks' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('tasks'); setMenuOpen(false); }}
-            >
-              ホーム
-            </button>
-            <button
-              type="button"
-              className={styles.menuItem}
-              onClick={() => setTaskMenuOpen(!taskMenuOpen)}
-            >
-              その他 {taskMenuOpen ? '▾' : '▸'}
-            </button>
-            {taskMenuOpen && (
-              <>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'task-sets' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('task-sets'); setMenuOpen(false); }}
-                >
-                  タスクセット
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'matrix' ? styles.menuItemActive : ''}`}
-                  onClick={() => { switchTab('matrix'); }}
-                >
-                  アイゼンハワーマトリクス {!isPro && '🔒'}
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'recurring' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('recurring'); setMenuOpen(false); }}
-                >
-                  繰り返しタスク
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'bucket-list' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('bucket-list'); setMenuOpen(false); }}
-                >
-                  やりたいことリスト
-                </button>
-                <button
-                  type="button"
-                  className={`${styles.menuSubItem} ${activeTab === 'archived' ? styles.menuItemActive : ''}`}
-                  onClick={() => { setActiveTab('archived'); setMenuOpen(false); }}
-                >
-                  削除したタスク
-                </button>
-              </>
-            )}
-
-            {/* --- 記録グループ --- */}
-            <div className={styles.menuGroupLabel}>記録</div>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'activity' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('activity'); setMenuOpen(false); }}
-            >
-              作業記録
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'category-stats' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('category-stats'); setMenuOpen(false); }}
-            >
-              カテゴリ別実績
-            </button>
-
-            {/* --- 日記グループ --- */}
-            <div className={styles.menuGroupLabel}>日記</div>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'diary-write' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('diary-write'); setMenuOpen(false); }}
-            >
-              書く
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'diary-view' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('diary-view'); setMenuOpen(false); }}
-            >
-              履歴
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'diary-public' ? styles.menuItemActive : ''}`}
-              onClick={() => { switchTab('diary-public'); }}
-            >
-              みんなの日記 {!isPro && '🔒'}
-            </button>
-
-            {/* --- アカウントグループ --- */}
-            <div className={styles.menuGroupLabel}>アカウント</div>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'mypage' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('mypage'); setMenuOpen(false); }}
-            >
-              マイページ
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'settings' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('settings'); setMenuOpen(false); }}
-            >
-              設定
-            </button>
-
-            {/* --- サポートグループ --- */}
-            <div className={styles.menuGroupLabel}>サポート</div>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'help' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('help'); setMenuOpen(false); }}
-            >
-              ヘルプ
-            </button>
-            <button
-              type="button"
-              className={`${styles.menuItem} ${activeTab === 'bug-report' ? styles.menuItemActive : ''}`}
-              onClick={() => { setActiveTab('bug-report'); setMenuOpen(false); }}
-            >
-              バグ報告
-            </button>
-            {user.role === 'admin' && (
-              <button
-                type="button"
-                className={`${styles.menuItem} ${activeTab === 'admin' ? styles.menuItemActive : ''}`}
-                onClick={() => { setActiveTab('admin'); setMenuOpen(false); }}
-              >
-                管理
-              </button>
-            )}
-          </nav>
-        </div>
-      )}
+      <AppHeader
+        user={user}
+        activeTab={activeTab}
+        isPro={isPro}
+        menuOpen={menuOpen}
+        onMenuOpenChange={setMenuOpen}
+        onTabChange={setActiveTab}
+        onSwitchProTab={switchTab}
+        onLogout={onLogout}
+      />
 
       {(activeTab === 'tasks' || activeTab === 'today' || activeTab === 'calendar' || activeTab === 'task-sets' || activeTab === 'recurring') && (
       <>
