@@ -35,11 +35,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   const db = await getDb();
 
-  /** ヘルパー: タイムスタンプをYYYY-MM-DD文字列に変換 */
+  // ユーザーのタイムゾーン設定を取得
+  let userTimezone: string = 'Asia/Tokyo';
+  try {
+    const tzRow = await db.get<{ timezone: string }>('SELECT timezone FROM user_settings WHERE user_id = ?', userId);
+    if (tzRow?.timezone) {
+      userTimezone = tzRow.timezone;
+    }
+  } catch { /* ignore */ }
+
+  /** ヘルパー: タイムスタンプをYYYY-MM-DD文字列に変換（ユーザーのタイムゾーン） */
   function tsToDate(ts: number): string {
     const d: Date = new Date(ts);
-    const pad = (n: number): string => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const formatter: Intl.DateTimeFormat = new Intl.DateTimeFormat('en-CA', {
+      timeZone: userTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    return formatter.format(d);
   }
 
   /** ヘルパー: 期間フィルター用のタイムスタンプ範囲を取得 */

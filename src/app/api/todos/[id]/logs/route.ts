@@ -71,8 +71,25 @@ export async function POST(
   if (body.date && body.date.trim()) {
     date = body.date.trim();
   } else {
+    // タスクの所有者のタイムゾーンで日付を取得
+    let timezone: string = 'Asia/Tokyo';
+    try {
+      const todo = await db.get<{ user_id: string }>('SELECT user_id FROM todos WHERE id = ?', id);
+      if (todo) {
+        const settings = await db.get<{ timezone: string }>('SELECT timezone FROM user_settings WHERE user_id = ?', todo.user_id);
+        if (settings?.timezone) {
+          timezone = settings.timezone;
+        }
+      }
+    } catch { /* ignore */ }
     const now: Date = new Date();
-    date = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const formatter: Intl.DateTimeFormat = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    });
+    date = formatter.format(now);
   }
   const createdAt: number = Date.now();
 

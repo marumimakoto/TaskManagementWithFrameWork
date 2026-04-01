@@ -17,7 +17,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = await getDb();
-  const today: string = todayStr();
+
+  // ユーザーのタイムゾーン設定を取得
+  let timezone: string = 'Asia/Tokyo';
+  try {
+    const row = await db.get<{ timezone: string }>('SELECT timezone FROM user_settings WHERE user_id = ?', userId);
+    if (row?.timezone) {
+      timezone = row.timezone;
+    }
+  } catch { /* カラム未追加時は無視 */ }
+
+  const today: string = todayStr(timezone);
 
   const result = await refreshUserTodos(db, userId, today);
 

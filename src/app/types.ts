@@ -130,6 +130,8 @@ export type UserSettings = {
   pomodoroWork: number;
   /** ポモドーロ休憩時間（分） */
   pomodoroBreak: number;
+  /** タイムゾーン（IANA形式、例: 'Asia/Tokyo'） */
+  timezone: string;
 };
 
 /** UserSettingsのデフォルト値 */
@@ -144,6 +146,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   showButler: true,
   pomodoroWork: 25,
   pomodoroBreak: 5,
+  timezone: 'Asia/Tokyo',
 };
 
 /**

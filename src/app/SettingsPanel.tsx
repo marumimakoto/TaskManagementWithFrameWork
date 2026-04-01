@@ -280,6 +280,33 @@ export default function SettingsPanel({
           </select>
         </div>
       </section>
+      {/* タイムゾーン */}
+      <section className={styles.settingsSection}>
+        <h3 className={styles.settingsSectionTitle}>タイムゾーン</h3>
+        <div className={styles.settingsRow}>
+          <label className={styles.fieldLabel}>日付の基準タイムゾーン</label>
+          <select
+            value={localSettings.timezone ?? 'Asia/Tokyo'}
+            onChange={(e) => updateSetting({ timezone: e.target.value })}
+            className={styles.input}
+          >
+            <option value="Asia/Tokyo">日本 (JST, UTC+9)</option>
+            <option value="America/New_York">米国東部 (EST/EDT)</option>
+            <option value="America/Chicago">米国中部 (CST/CDT)</option>
+            <option value="America/Denver">米国山岳部 (MST/MDT)</option>
+            <option value="America/Los_Angeles">米国西部 (PST/PDT)</option>
+            <option value="Europe/London">英国 (GMT/BST)</option>
+            <option value="Europe/Paris">中央ヨーロッパ (CET/CEST)</option>
+            <option value="Europe/Berlin">ドイツ (CET/CEST)</option>
+            <option value="Asia/Shanghai">中国 (CST, UTC+8)</option>
+            <option value="Asia/Kolkata">インド (IST, UTC+5:30)</option>
+            <option value="Asia/Seoul">韓国 (KST, UTC+9)</option>
+            <option value="Australia/Sydney">シドニー (AEST/AEDT)</option>
+            <option value="Pacific/Auckland">ニュージーランド (NZST/NZDT)</option>
+            <option value="UTC">UTC</option>
+          </select>
+        </div>
+      </section>
     </div>
   );
 }

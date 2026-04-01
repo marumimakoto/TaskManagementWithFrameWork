@@ -23,10 +23,19 @@ interface TodoRow {
 /**
  * 今日の日付をYYYY-MM-DD形式で返す
  */
-export function todayStr(): string {
+/**
+ * 指定タイムゾーンでの今日の日付をYYYY-MM-DD形式で返す
+ * @param timezone - IANAタイムゾーン名（例: 'Asia/Tokyo'）。デフォルトは 'Asia/Tokyo'
+ */
+export function todayStr(timezone: string = 'Asia/Tokyo'): string {
   const now: Date = new Date();
-  const pad = (n: number): string => String(n).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const formatter: Intl.DateTimeFormat = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(now);
 }
 
 /**
@@ -34,14 +43,29 @@ export function todayStr(): string {
  * @param recurrence 繰り返し種別文字列
  * @returns true=今日追加すべき
  */
-export function shouldAddToday(recurrence: string): boolean {
+export function shouldAddToday(recurrence: string, timezone: string = 'Asia/Tokyo'): boolean {
   if (recurrence === 'carry') {
     return false;
   }
 
+  // 指定タイムゾーンでの現在日時の各パーツを取得
   const now: Date = new Date();
-  const dayOfWeek: number = now.getDay(); // 0=日, 1=月, ...
-  const dayOfMonth: number = now.getDate();
+  const parts: Record<string, string> = {};
+  const formatter: Intl.DateTimeFormat = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    weekday: 'short',
+  });
+  for (const part of formatter.formatToParts(now)) {
+    parts[part.type] = part.value;
+  }
+  const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  const dayOfWeek: number = weekdayMap[parts.weekday] ?? now.getDay();
+  const dayOfMonth: number = parseInt(parts.day, 10);
+  const month: number = parseInt(parts.month, 10) - 1; // 0-based
+  const year: number = parseInt(parts.year, 10);
 
   if (recurrence === 'daily') {
     return true;
@@ -56,7 +80,7 @@ export function shouldAddToday(recurrence: string): boolean {
   }
   if (recurrence === 'yearly') {
     // 毎年1/1（デフォルト）
-    return now.getMonth() === 0 && dayOfMonth === 1;
+    return month === 0 && dayOfMonth === 1;
   }
 
   // カスタム繰り返し: "custom:N:unit" or "custom:N:unit:options"
@@ -67,7 +91,7 @@ export function shouldAddToday(recurrence: string): boolean {
 
     if (unit === 'day') {
       // N日ごと: 簡易判定（年初からの日数 % interval）
-      const startOfYear: Date = new Date(now.getFullYear(), 0, 1);
+      const startOfYear: Date = new Date(year, 0, 1);
       const dayOfYear: number = Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
       return dayOfYear % interval === 0;
     }
@@ -84,13 +108,13 @@ export function shouldAddToday(recurrence: string): boolean {
         return true;
       }
       // N週ごと: 年初からの週数 % interval
-      const startOfYear: Date = new Date(now.getFullYear(), 0, 1);
+      const startOfYear: Date = new Date(year, 0, 1);
       const weekNum: number = Math.floor((now.getTime() - startOfYear.getTime()) / (7 * 86400000));
       return weekNum % interval === 0;
     }
     if (unit === 'month') {
       // N月ごと
-      if (interval > 1 && now.getMonth() % interval !== 0) {
+      if (interval > 1 && month % interval !== 0) {
         return false;
       }
       const monthMode: string = parts[3] ?? 'date';
@@ -112,7 +136,7 @@ export function shouldAddToday(recurrence: string): boolean {
       }
     }
     if (unit === 'year') {
-      if (now.getMonth() === 0 && dayOfMonth === 1) {
+      if (month === 0 && dayOfMonth === 1) {
         return true;
       }
     }
