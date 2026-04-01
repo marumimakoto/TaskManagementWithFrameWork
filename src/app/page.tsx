@@ -487,6 +487,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [undoToasts, setUndoToasts] = useState<UndoToast[]>([]);
   const deleteOnceRef = useRef<Record<string, number>>({});
 
+  // todosが変わるたびにlocalStorageキャッシュを更新
+  useEffect(() => {
+    if (todos.length > 0) {
+      try { localStorage.setItem('kiroku:todos:' + user.id, JSON.stringify(todos)); } catch { /* ignore */ }
+    }
+  }, [todos, user.id]);
+
   /** FLIPアニメーション用: 各カードのDOM要素を保持 */
   const cardRefsMap = useRef<Record<string, HTMLElement | null>>({});
   /** FLIPアニメーション用: ソート前の各カードの位置を保持 */
