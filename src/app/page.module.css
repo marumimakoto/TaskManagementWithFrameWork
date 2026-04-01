@@ -652,7 +652,7 @@
 }
 
 .todoListDragging {
-  gap: 16px;
+  gap: 8px;
 }
 
 .dropZone {
