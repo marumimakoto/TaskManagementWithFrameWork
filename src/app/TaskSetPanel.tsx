@@ -51,9 +51,24 @@ export default function TaskSetPanel({
   onApply: (items: { title: string; estMin: number; detail?: string; recurrence: string; deadline?: string }[]) => void;
 }): React.ReactElement {
   const isMobile: boolean = useIsMobile();
-  const [sets, setSets] = useState<TaskSet[]>([]);
+  const CACHE_KEY: string = 'kiroku:task-sets:' + user.id;
+  const [sets, setSets] = useState<TaskSet[]>(() => {
+    try {
+      const cached: string | null = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        return JSON.parse(cached) as TaskSet[];
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
   const [publicSets, setPublicSets] = useState<PublicTaskSet[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem(CACHE_KEY);
+    } catch {
+      return true;
+    }
+  });
   const [publicLoading, setPublicLoading] = useState<boolean>(false);
   const [editingSetId, setEditingSetId] = useState<string | null>(null);
   const [editingSetName, setEditingSetName] = useState<string | null>(null);
@@ -86,6 +101,7 @@ export default function TaskSetPanel({
       const res: Response = await fetch('/api/task-sets?userId=' + user.id);
       const data: TaskSet[] = await res.json();
       setSets(data);
+      try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); } catch { /* ignore */ }
     } catch (e) {
       console.warn('Failed to fetch task sets', e);
     } finally {
