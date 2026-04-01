@@ -113,7 +113,10 @@ export function toInputDeadline(ts: number): string {
  * @returns 表示用の締切文字列
  */
 export function formatDeadline(ts?: number): string {
-  const d: Date = ts ? new Date(ts) : new Date();
+  if (!ts) {
+    return '--';
+  }
+  const d: Date = new Date(ts);
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
 }
