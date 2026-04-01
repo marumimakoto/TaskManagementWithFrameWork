@@ -436,22 +436,53 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
       </section>
 
       {/* エクスポートボタン（PC版のみ） */}
-      {!isMobile && filteredEntries.length > 0 && (
+      {!isMobile && !loading && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <button
             type="button"
             className={styles.iconBtn}
             style={{ fontSize: 13 }}
             onClick={() => {
-              const lines: string[] = filteredEntries.map((entry: ActivityEntry) => {
-                return `${entry.date}\t${entry.title}\t${entry.content}`;
-              });
-              const txt: string = lines.join('\n');
+              let header: string = '';
+              let lines: string[] = [];
+              let filename: string = 'activity';
+
+              if (viewMode === 'list') {
+                header = '日付\tタイトル\t内容';
+                lines = filteredEntries.map((entry: ActivityEntry) => {
+                  return `${entry.date}\t${entry.title}\t${entry.content}`;
+                });
+                filename = 'activity-list';
+              } else if (viewMode === 'stats') {
+                header = '日付\t作業ログ数\t完了数\t作業時間(分)';
+                lines = filteredStats.map((stat: DailyStat) => {
+                  return `${stat.date}\t${stat.workLogs}\t${stat.completed}\t${stat.workedMin}`;
+                });
+                filename = 'activity-stats';
+              } else if (viewMode === 'chart') {
+                header = 'カテゴリ\t合計作業時間(分)';
+                lines = categoryData.map((d) => {
+                  return `${d.category}\t${d.totalMin}`;
+                });
+                filename = 'activity-category';
+              } else if (viewMode === 'pareto') {
+                header = 'タイトル\t作業時間(分)\t割合(%)\t累積(%)';
+                const totalMin: number = paretoData.reduce((sum, item) => sum + item.actualMin, 0);
+                let cumulative: number = 0;
+                lines = paretoData.map((item) => {
+                  const percent: number = totalMin > 0 ? (item.actualMin / totalMin) * 100 : 0;
+                  cumulative += percent;
+                  return `${item.title}\t${item.actualMin}\t${Math.round(percent)}\t${Math.round(cumulative)}`;
+                });
+                filename = 'activity-pareto';
+              }
+
+              const txt: string = header + '\n' + lines.join('\n');
               const blob: Blob = new Blob([txt], { type: 'text/plain' });
               const url: string = URL.createObjectURL(blob);
               const a: HTMLAnchorElement = document.createElement('a');
               a.href = url;
-              a.download = 'activity-log.txt';
+              a.download = filename + '.txt';
               a.click();
               URL.revokeObjectURL(url);
             }}
