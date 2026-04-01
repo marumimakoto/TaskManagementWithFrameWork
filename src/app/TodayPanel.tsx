@@ -1,9 +1,11 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Todo } from './types';
 import { minutesToText, formatDeadline } from './utils';
 import styles from './page.module.css';
+
+const TODAY_IDS_KEY: string = 'kiroku:today-ids';
 
 /**
  * 今日やることビュー
@@ -25,8 +27,24 @@ export default function TodayPanel({
   renderExpanded?: (t: Todo) => React.ReactNode;
   onFieldEdit?: (todoId: string, field: string, value: string) => void;
 }): React.ReactElement {
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    try {
+      const raw: string | null = localStorage.getItem(TODAY_IDS_KEY);
+      if (raw) {
+        return new Set<string>(JSON.parse(raw) as string[]);
+      }
+    } catch { /* ignore */ }
+    return new Set<string>();
+  });
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // selectedIdsが変わるたびにlocalStorageに保存
+  useEffect(() => {
+    try {
+      localStorage.setItem(TODAY_IDS_KEY, JSON.stringify([...selectedIds]));
+    } catch { /* ignore */ }
+  }, [selectedIds]);
+
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
