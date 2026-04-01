@@ -104,10 +104,23 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
 
   const fetchItems = useCallback(async (): Promise<void> => {
     try {
-      const res: Response = await fetch('/api/todos/recurring?userId=' + user.id);
-      const data: RecurringTodo[] = await res.json();
+      const [recurringRes, archiveRes] = await Promise.all([
+        fetch('/api/todos/recurring?userId=' + user.id),
+        fetch('/api/todos/archive?userId=' + user.id),
+      ]);
+      const data: RecurringTodo[] = await recurringRes.json();
       setItems(data);
       try { localStorage.setItem('kiroku:recurring:' + user.id, JSON.stringify(data)); } catch { /* ignore */ }
+
+      // アーカイブから累計実績時間を集計
+      try {
+        const archiveData: { title: string; actualMin: number }[] = await archiveRes.json();
+        const actualMap: Record<string, number> = {};
+        for (const a of archiveData) {
+          actualMap[a.title] = (actualMap[a.title] ?? 0) + (a.actualMin ?? 0);
+        }
+        setTotalActualByTitle(actualMap);
+      } catch { /* ignore */ }
     } catch (e) {
       console.error('Failed to fetch recurring todos', e);
     } finally {
@@ -241,7 +254,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
             <div style={{ width: '100%', height: 8, background: 'var(--input-border)', borderRadius: 4 }}>
               <div style={{ width: `${overallRate}%`, height: '100%', background: '#3b82f6', borderRadius: 4, transition: 'width 0.5s ease' }} />
             </div>
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-around', fontSize: 14 }}>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-around', fontSize: 14, flexWrap: 'wrap', gap: 8 }}>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>生成回数</div>
                 <div style={{ fontWeight: 700, fontSize: 20 }}>{totalGenerated}</div>
@@ -249,6 +262,12 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
               <div style={{ textAlign: 'center' }}>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>達成回数</div>
                 <div style={{ fontWeight: 700, fontSize: 20, color: '#22c55e' }}>{totalCompleted}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>累計実績</div>
+                <div style={{ fontWeight: 700, fontSize: 20, color: '#3b82f6' }}>
+                  {minutesToText(Object.values(totalActualByTitle).reduce((s, v) => s + v, 0))}
+                </div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>ルール数</div>
@@ -282,10 +301,11 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                           background: rate >= 80 ? '#22c55e' : rate >= 50 ? '#f59e0b' : '#ef4444',
                         }} />
                       </div>
-                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--muted)' }}>
+                      <div style={{ display: 'flex', gap: 12, fontSize: 12, color: 'var(--muted)', flexWrap: 'wrap' }}>
                         <span>🔁 {recurrenceLabel(t.recurrence)}</span>
                         <span>生成: {t.generatedCount}回</span>
                         <span>達成: {t.completedCount}回</span>
+                        <span>累計: {minutesToText(totalActualByTitle[t.title] ?? 0)}</span>
                       </div>
                     </div>
                   );
