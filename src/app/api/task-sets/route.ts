@@ -32,7 +32,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'userId is required' }, { status: 400 });
   }
 
+  const t0: number = Date.now();
   const db = await getDb();
+  const t1: number = Date.now();
   // セットとアイテムを1回のクエリで取得（N+1解消）
   const sets: TaskSetRow[] = await db.all<TaskSetRow>(
     'SELECT * FROM task_sets WHERE user_id = ? ORDER BY created_at DESC', userId
@@ -70,6 +72,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     })),
   }));
 
+  const t2: number = Date.now();
+  console.log(`[task-sets] getDb: ${t1 - t0}ms, query: ${t2 - t1}ms, total: ${t2 - t0}ms, sets: ${sets.length}, items: ${allItems.length}`);
   return NextResponse.json(result);
 }
 
