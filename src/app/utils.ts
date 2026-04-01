@@ -113,10 +113,7 @@ export function toInputDeadline(ts: number): string {
  * @returns 表示用の締切文字列
  */
 export function formatDeadline(ts?: number): string {
-  if (!ts) {
-    return '今日中';
-  }
-  const d :Date= new Date(ts);
+  const d: Date = ts ? new Date(ts) : new Date();
   const pad = (n: number): string => String(n).padStart(2, '0');
   return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}`;
 }
