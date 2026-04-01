@@ -56,10 +56,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const entries: ActivityEntry[] = [];
 
   // 1. 作業ログ（削除済みタスクの作業ログも含む）
-  {
+  try {
     let query: string = `
-      SELECT w.id, w.todo_id, COALESCE(t.title, a.title, '不明なタスク') as title, w.content, w.date, w.created_at,
-             COALESCE(t.category, '') as category
+      SELECT w.id, w.todo_id, COALESCE(t.title, a.title, '不明なタスク') as title, w.content, w.date, w.created_at
       FROM work_logs w
       LEFT JOIN todos t ON w.todo_id = t.id
       LEFT JOIN archived_todos a ON w.todo_id = a.id
@@ -75,8 +74,21 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       queryParams.push(to);
     }
     const rows = await db.all<{
-      id: string; todo_id: string; title: string; content: string; date: string; created_at: number; category: string;
+      id: string; todo_id: string; title: string; content: string; date: string; created_at: number;
     }>(query, ...queryParams);
+
+    // カテゴリ情報を別途取得（todosテーブルから）
+    const todoIdSet: Set<string> = new Set(rows.map((r) => r.todo_id));
+    const catMap: Map<string, string> = new Map();
+    if (todoIdSet.size > 0) {
+      try {
+        const catRows = await db.all<{ id: string; category: string }>('SELECT id, category FROM todos WHERE user_id = ?', userId);
+        for (const r of catRows) {
+          catMap.set(r.id, r.category || '');
+        }
+      } catch { /* category column may not exist */ }
+    }
+
     for (const row of rows) {
       entries.push({
         id: 'wl-' + row.id,
@@ -85,21 +97,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: row.content,
         date: row.date,
         timestamp: row.created_at,
-        category: row.category || '未分類',
+        category: catMap.get(row.todo_id) || '未分類',
       });
     }
+  } catch (e) {
+    console.warn('[activity] work_logs query failed:', e);
   }
 
   // 2. 新規作成されたタスク
-  {
-    let query: string = 'SELECT id, title, category, created_at FROM todos WHERE user_id = ?';
+  try {
+    let query: string = 'SELECT id, title, created_at FROM todos WHERE user_id = ?';
     const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND created_at BETWEEN ? AND ?';
       queryParams.push(range.start, range.end);
     }
     const rows = await db.all<{
-      id: string; title: string; category: string; created_at: number;
+      id: string; title: string; created_at: number;
     }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
@@ -109,21 +123,23 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを作成しました',
         date: tsToDate(row.created_at),
         timestamp: row.created_at,
-        category: row.category || '未分類',
+        category: '未分類',
       });
     }
+  } catch (e) {
+    console.warn('[activity] created query failed:', e);
   }
 
   // 3. 完了したタスク（todosとarchived_todosの両方から取得）
-  {
+  try {
     // 現在のtodosから完了タスク
-    let query1: string = 'SELECT id, title, category, last_worked_at FROM todos WHERE user_id = ? AND done = 1 AND last_worked_at IS NOT NULL';
+    let query1: string = 'SELECT id, title, last_worked_at FROM todos WHERE user_id = ? AND done = 1 AND last_worked_at IS NOT NULL';
     const params1: (string | number)[] = [userId];
     if (range) {
       query1 += ' AND last_worked_at BETWEEN ? AND ?';
       params1.push(range.start, range.end);
     }
-    const rows1 = await db.all<{ id: string; title: string; category: string; last_worked_at: number }>(query1, ...params1);
+    const rows1 = await db.all<{ id: string; title: string; last_worked_at: number }>(query1, ...params1);
     for (const row of rows1) {
       entries.push({
         id: 'cp-' + row.id,
@@ -132,7 +148,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを完了しました',
         date: tsToDate(row.last_worked_at),
         timestamp: row.last_worked_at,
-        category: row.category || '未分類',
+        category: '未分類',
       });
     }
     // アーカイブから完了タスク（削除されても完了記録は残る）
@@ -157,6 +173,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         });
       }
     }
+  } catch (e) {
+    console.warn('[activity] completed query failed:', e);
   }
 
   // 4. 削除されたタスク
