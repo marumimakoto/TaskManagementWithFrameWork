@@ -177,36 +177,29 @@ export function riskRank(t: Todo): number {
  * - 未着手のまま3日経過 or 期限が今日以前 → cardDanger（赤）
  * - それ以外 → cardInProgress（青）
  */
+/**
+ * タスクカードの背景色クラスを返す
+ * - 完了(done) → 緑(cardDone)
+ * - 今日着手済み(lastWorkedAtが今日) → 青(cardInProgress)
+ * - 未着手(lastWorkedAtが今日でない or null) → 赤(cardDanger)
+ */
 export function cardBgClass(t: Todo): 'cardDone' | 'cardDanger' | 'cardInProgress' {
   if (t.done) {
     return 'cardDone';
   }
-
-  const now: number = Date.now();
-  const DAY_MS: number = 24 * 60 * 60 * 1000;
-
-  // 未着手（実績0）のまま作成から3日経過
-  if (t.actualMin <= 0 && t.createdAt) {
-    const daysSinceCreated: number = (now - t.createdAt) / DAY_MS;
-    if (daysSinceCreated >= 3) {
-      return 'cardDanger';
+  // lastWorkedAtが今日かどうかで判定
+  if (t.lastWorkedAt) {
+    const now: Date = new Date();
+    const worked: Date = new Date(t.lastWorkedAt);
+    const isToday: boolean =
+      now.getFullYear() === worked.getFullYear() &&
+      now.getMonth() === worked.getMonth() &&
+      now.getDate() === worked.getDate();
+    if (isToday) {
+      return 'cardInProgress';
     }
   }
-
-  // 期限が今日以前
-  if (t.deadline) {
-    const todayEnd: number = new Date().setHours(23, 59, 59, 999);
-    if (t.deadline <= todayEnd) {
-      return 'cardDanger';
-    }
-  }
-
-  const c: ChecklistResult = checklist(t);
-  const okAll: boolean = c.okDeadline && c.okStuck && c.okNotIdle;
-  if (!okAll) {
-    return 'cardDanger';
-  }
-  return 'cardInProgress';
+  return 'cardDanger';
 }
 
 /**

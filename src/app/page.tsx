@@ -2704,7 +2704,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             onClick={() => setStatusFilter(statusFilter === 'danger' ? 'all' : 'danger')}
           >
             <span className={styles.legendDot} style={{ background: '#ef4444' }} />
-            リスクあり({legendCounts.danger})
+            未着手({legendCounts.danger})
           </span>
           <span
             className={styles.legendItem}
@@ -2712,7 +2712,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             onClick={() => setStatusFilter(statusFilter === 'inProgress' ? 'all' : 'inProgress')}
           >
             <span className={styles.legendDot} style={{ background: '#3b82f6' }} />
-            進行中({legendCounts.inProgress})
+            着手済み({legendCounts.inProgress})
           </span>
           <span
             className={styles.legendItem}
@@ -3383,8 +3383,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               </div>
 
               {/* ステータスバッジ */}
-              <span className={t.done ? styles.badgeOk : t.actualMin > 0 ? styles.badgeOk : styles.badgeNg} style={{ visibility: 'visible' }}>
-                {t.done ? '完了' : t.actualMin > 0 ? '着手' : '未着手'}
+              <span className={bgClass === 'cardDanger' ? styles.badgeNg : styles.badgeOk} style={{ visibility: 'visible' }}>
+                {bgClass === 'cardDone' ? '完了' : bgClass === 'cardInProgress' ? '着手' : '未着手'}
               </span>
 
               {/* 期限 */}
@@ -3642,8 +3642,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {/* カンバン表示 */}
       {viewMode === 'kanban' && (() => {
-        const notStarted: Todo[] = todos.filter((t) => !t.done && t.actualMin <= 0);
-        const inProgress: Todo[] = todos.filter((t) => !t.done && t.actualMin > 0);
+        const notStarted: Todo[] = todos.filter((t) => cardBgClass(t) === 'cardDanger');
+        const inProgress: Todo[] = todos.filter((t) => cardBgClass(t) === 'cardInProgress');
         const doneTasks: Todo[] = todos.filter((t) => t.done);
 
         function renderKanbanCard(t: Todo): React.ReactElement {

@@ -226,7 +226,10 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     )
   `, userId);
 
-  // 3. last_refresh_dateを更新
+  // 3. 未完了タスクのlast_worked_atをリセット（毎日未着手に戻す。actualMinは累計なのでリセットしない）
+  await db.run('UPDATE todos SET last_worked_at = NULL WHERE user_id = ? AND done = 0', userId);
+
+  // 4. last_refresh_dateを更新
   await db.run('UPDATE users SET last_refresh_date = ? WHERE id = ?', today, userId);
 
   return {
