@@ -3269,12 +3269,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 </div>
               )}
 
-              {/* 着手/未着手バッジ（実績 > 0 なら着手） */}
-              {!t.done && (
-                <span className={t.actualMin > 0 ? styles.badgeOk : styles.badgeNg}>
-                  {t.actualMin > 0 ? '着手' : '未着手'}
-                </span>
-              )}
+              {/* ステータスバッジ */}
+              <span className={t.done ? styles.badgeOk : t.actualMin > 0 ? styles.badgeOk : styles.badgeNg} style={{ visibility: 'visible' }}>
+                {t.done ? '完了' : t.actualMin > 0 ? '着手' : '未着手'}
+              </span>
 
               {/* Right: actions */}
               <div className={styles.actions}>

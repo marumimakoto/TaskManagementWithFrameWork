@@ -2679,7 +2679,7 @@
     gap: 6px;
   }
 
-  /* タスクカード: PC版と同じ1行レイアウト */
+  /* タスクカード: 1行レイアウト（詳細は展開時のみ） */
   .card {
     grid-template-columns: auto minmax(0, 1fr) auto auto auto;
     gap: 4px;
@@ -2693,26 +2693,24 @@
     flex-direction: row;
     gap: 4px;
     align-items: baseline;
+    min-width: 0;
+  }
+
+  .cardLeftTitle {
+    min-width: 0;
   }
 
   .taskTitle {
-    font-size: 15px !important;
-    white-space: normal;
-    overflow: visible;
-    text-overflow: unset;
-    word-break: break-word;
+    font-size: 14px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
     padding: 1px 4px !important;
   }
 
-  /* スマホ: 詳細をタイトルの下に1行で表示 */
+  /* スマホ: 詳細は展開時のみ */
   .taskDetail {
-    display: block !important;
-    font-size: 12px !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    padding: 0 4px !important;
-    margin-top: 0 !important;
+    display: none !important;
   }
 
   .taskDetailExpanded {
@@ -3168,7 +3166,7 @@
   }
 
   .taskDetail {
-    display: block;
+    display: none;
     font-size: 12px;
     white-space: nowrap;
     overflow: hidden;
