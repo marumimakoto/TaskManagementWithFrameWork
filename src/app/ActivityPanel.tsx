@@ -103,10 +103,11 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         const dailyMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
         const pad = (n: number): string => String(n).padStart(2, '0');
         for (const t of [...todos, ...archived]) {
-          if (!t.actualMin || t.actualMin <= 0) {
+          const actualMin: number = t.actualMin ?? 0;
+          if (actualMin <= 0) {
             continue;
           }
-          const ts: number = t.lastWorkedAt ?? t.archivedAt ?? t.createdAt ?? 0;
+          const ts: number = t.lastWorkedAt ?? t.archivedAt ?? t.createdAt ?? Date.now();
           if (!ts) {
             continue;
           }
@@ -118,8 +119,8 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             entry = { total: 0, byCategory: {} };
             dailyMap.set(dateKey, entry);
           }
-          entry.total += t.actualMin;
-          entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + t.actualMin;
+          entry.total += actualMin;
+          entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + actualMin;
         }
         const dailyCat: { date: string; total: number; byCategory: Record<string, number> }[] =
           [...dailyMap.entries()]
@@ -618,6 +619,9 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             </div>
 
             {/* 折れ線グラフ */}
+            {chartMode === 'line' && dailyCategoryData.length === 0 && (
+              <p className={styles.diaryEmpty}>作業実績のあるタスクがありません。タスクに実績時間を入力すると折れ線グラフが表示されます。</p>
+            )}
             {chartMode === 'line' && dailyCategoryData.length > 0 && (() => {
               const data = dailyCategoryData.slice(-30); // 直近30日
               const maxVal: number = Math.max(...data.map((d) => {
