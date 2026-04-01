@@ -215,7 +215,11 @@ async function initializeTables(c: Client): Promise<void> {
       font_family TEXT NOT NULL DEFAULT 'system-ui, sans-serif',
       butler_avatar TEXT NOT NULL DEFAULT '',
       butler_prompt TEXT NOT NULL DEFAULT 'ユーザーを励ませ',
-      butler_max_chars INTEGER NOT NULL DEFAULT 80
+      butler_max_chars INTEGER NOT NULL DEFAULT 80,
+      welcome_tone TEXT NOT NULL DEFAULT 'trivia',
+      show_butler INTEGER NOT NULL DEFAULT 1,
+      pomodoro_work INTEGER NOT NULL DEFAULT 25,
+      pomodoro_break INTEGER NOT NULL DEFAULT 5
     )`,
     `CREATE TABLE IF NOT EXISTS bug_reports (
       id TEXT PRIMARY KEY,
@@ -275,5 +279,21 @@ async function initializeTables(c: Client): Promise<void> {
 
   for (const sql of tables) {
     await c.execute(sql);
+  }
+
+  // マイグレーション: 既存テーブルに不足カラムを追加
+  const migrations: string[] = [
+    "ALTER TABLE user_settings ADD COLUMN welcome_tone TEXT NOT NULL DEFAULT 'trivia'",
+    "ALTER TABLE user_settings ADD COLUMN show_butler INTEGER NOT NULL DEFAULT 1",
+    "ALTER TABLE user_settings ADD COLUMN pomodoro_work INTEGER NOT NULL DEFAULT 25",
+    "ALTER TABLE user_settings ADD COLUMN pomodoro_break INTEGER NOT NULL DEFAULT 5",
+    "ALTER TABLE archived_todos ADD COLUMN category TEXT NOT NULL DEFAULT ''",
+  ];
+  for (const sql of migrations) {
+    try {
+      await c.execute(sql);
+    } catch {
+      // カラムが既に存在する場合は無視
+    }
   }
 }
