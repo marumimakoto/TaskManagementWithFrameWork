@@ -281,6 +281,32 @@ async function initializeTables(c: Client): Promise<void> {
     await c.execute(sql);
   }
 
+  // インデックス作成: クエリパフォーマンス向上のため
+  const indexes: string[] = [
+    `CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_todos_user_id_done ON todos (user_id, done)`,
+    `CREATE INDEX IF NOT EXISTS idx_work_logs_todo_id ON work_logs (todo_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diary_entries_user_id_date ON diary_entries (user_id, date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_diary_entries_public ON diary_entries (is_public, date DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_diary_replies_diary_id ON diary_replies (diary_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_diary_likes_diary_id ON diary_likes (diary_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_archived_todos_user_id ON archived_todos (user_id, archived_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_recurring_rules_user_id_enabled ON recurring_rules (user_id, enabled)`,
+    `CREATE INDEX IF NOT EXISTS idx_todo_categories_user_id ON todo_categories (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_bucket_list_user_id ON bucket_list (user_id, done ASC, sort_order ASC)`,
+    `CREATE INDEX IF NOT EXISTS idx_bucket_categories_user_id ON bucket_categories (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_bucket_shares_user_id ON bucket_shares (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_task_sets_user_id ON task_sets (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_task_set_items_set_id ON task_set_items (set_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_task_set_likes_set_id ON task_set_likes (set_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_bug_reports_user_id ON bug_reports (user_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_matrix_positions_user_id ON matrix_positions (user_id)`,
+  ];
+
+  for (const sql of indexes) {
+    await c.execute(sql);
+  }
+
   // マイグレーション: 既存テーブルに不足カラムを追加
   const migrations: string[] = [
     "ALTER TABLE user_settings ADD COLUMN welcome_tone TEXT NOT NULL DEFAULT 'trivia'",
