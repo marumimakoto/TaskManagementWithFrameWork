@@ -480,6 +480,16 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ userId: user.id, todo }),
                       });
+                      // generated_countを+1
+                      await fetch('/api/todos/recurring', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id: t.id, updates: { incrementGenerated: true } }),
+                      });
+                      // ローカルのカウントも更新
+                      setItems((prev) => prev.map((item) =>
+                        item.id === t.id ? { ...item, generatedCount: item.generatedCount + 1 } : item
+                      ));
                       onRefresh();
                       // Undoトースト
                       setUndoItem(null);

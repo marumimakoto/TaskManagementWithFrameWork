@@ -92,6 +92,16 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       fields.push('deadline_offset_days = ?');
       values.push(updates.deadlineOffsetDays);
     }
+    if (updates.enabled !== undefined) {
+      fields.push('enabled = ?');
+      values.push(updates.enabled ? 1 : 0);
+    }
+    if (updates.incrementGenerated) {
+      fields.push('generated_count = generated_count + 1');
+    }
+    if (updates.incrementCompleted) {
+      fields.push('completed_count = completed_count + 1');
+    }
 
     if (fields.length === 0) {
       return NextResponse.json({ error: 'no fields' }, { status: 400 });
