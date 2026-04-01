@@ -15,6 +15,7 @@ interface ActivityEntry {
   content: string;
   date: string;
   timestamp: number;
+  category: string;
 }
 
 /** 日別統計 */
@@ -60,6 +61,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'completed']));
   const [currentPage, setCurrentPage] = useState<number>(1);
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const PAGE_SIZE: number = 20;
 
   /** アクティビティを取得する */
@@ -128,7 +130,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             .map(([date, data]) => ({ date, ...data }));
         setDailyCategoryData(dailyCat);
         console.log('[activity-debug] dailyCat:', dailyCat.length, 'items, catData:', catData.length);
-      } catch { /* ignore */ }
+      } catch (catErr) { console.warn('[activity] category fetch failed:', catErr); }
     } catch (e) {
       console.warn('Failed to fetch activity', e);
     } finally {
@@ -183,8 +185,26 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
     });
   }
 
-  // フィルター適用後のエントリ
-  const filteredEntries: ActivityEntry[] = entries.filter((e) => typeFilter.has(e.type));
+  // エントリに含まれるカテゴリ一覧（種別フィルター適用後）
+  const entryCategories: string[] = useMemo((): string[] => {
+    const typeFiltered: ActivityEntry[] = entries.filter((e) => typeFilter.has(e.type));
+    const catSet: Set<string> = new Set<string>();
+    for (const e of typeFiltered) {
+      catSet.add(e.category || '未分類');
+    }
+    return [...catSet].sort();
+  }, [entries, typeFilter]);
+
+  // フィルター適用後のエントリ（種別 + カテゴリ）
+  const filteredEntries: ActivityEntry[] = entries.filter((e) => {
+    if (!typeFilter.has(e.type)) {
+      return false;
+    }
+    if (categoryFilter !== 'all' && (e.category || '未分類') !== categoryFilter) {
+      return false;
+    }
+    return true;
+  });
   const grouped: { date: string; items: ActivityEntry[] }[] = groupByDate(filteredEntries);
 
   // ページネーション（エントリ単位で20件ずつ）
@@ -435,6 +455,42 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             );
           })}
         </div>}
+
+        {/* カテゴリフィルター（一覧モード時のみ） */}
+        {viewMode === 'list' && entryCategories.length > 1 && (
+          <div className={styles.activityTypeFilterRow} style={{ marginTop: 4 }}>
+            <button
+              type="button"
+              className={styles.activityTypeFilterBtn}
+              style={{
+                background: categoryFilter === 'all' ? '#6b7280' : 'transparent',
+                color: categoryFilter === 'all' ? '#ffffff' : '#6b7280',
+                borderColor: '#6b7280',
+              }}
+              onClick={() => { setCategoryFilter('all'); setCurrentPage(1); }}
+            >
+              全カテゴリ
+            </button>
+            {entryCategories.map((cat: string) => {
+              const isActive: boolean = categoryFilter === cat;
+              return (
+                <button
+                  key={cat}
+                  type="button"
+                  className={styles.activityTypeFilterBtn}
+                  style={{
+                    background: isActive ? '#6b7280' : 'transparent',
+                    color: isActive ? '#ffffff' : '#6b7280',
+                    borderColor: '#6b7280',
+                  }}
+                  onClick={() => { setCategoryFilter(cat); setCurrentPage(1); }}
+                >
+                  {cat}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </section>
 
       {/* エクスポートボタン（PC版のみ） */}
@@ -450,11 +506,12 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
               let filename: string = 'activity';
 
               if (viewMode === 'list') {
-                header = '日付\tタイトル\t内容';
+                header = '日付\tカテゴリ\tタイトル\t内容';
                 lines = filteredEntries.map((entry: ActivityEntry) => {
                   const cleanTitle: string = entry.title.replace(/[\r\n\t]/g, ' ');
                   const cleanContent: string = entry.content.replace(/[\r\n\t]/g, ' ');
-                  return `${entry.date}\t${cleanTitle}\t${cleanContent}`;
+                  const cleanCategory: string = (entry.category || '未分類').replace(/[\r\n\t]/g, ' ');
+                  return `${entry.date}\t${cleanCategory}\t${cleanTitle}\t${cleanContent}`;
                 });
                 filename = 'activity-list';
               } else if (viewMode === 'stats') {
@@ -622,11 +679,18 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             </div>}
 
             {/* 折れ線グラフ */}
-            {chartMode === 'line' && dailyCategoryData.length === 0 && (
-              <p className={styles.diaryEmpty}>作業実績のあるタスクがありません。タスクに実績時間を入力すると折れ線グラフが表示されます。</p>
-            )}
-            {chartMode === 'line' && dailyCategoryData.length > 0 && (() => {
-              const data = dailyCategoryData.slice(-30); // 直近30日
+            {chartMode === 'line' && (() => {
+              // dailyCategoryDataがあればカテゴリ内訳付き、なければdailyStatsのworkedMinで描画
+              const hasCategory: boolean = dailyCategoryData.length > 0;
+              const lineData: { date: string; total: number; byCategory: Record<string, number> }[] = hasCategory
+                ? dailyCategoryData.slice(-30)
+                : [...dailyStats].filter((s) => s.workedMin > 0).reverse().slice(-30).map((s) => ({ date: s.date, total: s.workedMin, byCategory: {} }));
+
+              if (lineData.length === 0) {
+                return <p className={styles.diaryEmpty}>作業実績のあるタスクがありません。タスクに実績時間を入力すると折れ線グラフが表示されます。</p>;
+              }
+
+              const data = lineData;
               const maxVal: number = Math.max(...data.map((d) => {
                 let max: number = d.total;
                 for (const cat of visibleCategories) { max = Math.max(max, d.byCategory[cat] ?? 0); }

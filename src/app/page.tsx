@@ -677,6 +677,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   // 表示モード
   const [viewMode, setViewMode] = useState<'detail' | 'compact' | 'grid' | 'kanban'>('detail');
   const [statusFilter, setStatusFilter] = useState<'all' | 'danger' | 'inProgress' | 'done'>('all');
+  const [sortMode, setSortMode] = useState<'manual' | 'createdAsc' | 'createdDesc' | 'deadlineAsc' | 'deadlineDesc'>('manual');
 
   // スマホではグリッド・カンバンモードを使えないようにする
   useEffect(() => {
@@ -760,7 +761,27 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         }
       }
 
-      // それ以外はsortOrder順
+      // ソートモード別
+      if (sortMode === 'createdAsc') {
+        return (a.createdAt ?? 0) - (b.createdAt ?? 0);
+      }
+      if (sortMode === 'createdDesc') {
+        return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+      }
+      if (sortMode === 'deadlineAsc') {
+        // 期限なしは最後尾（Infinity扱い）
+        const aDeadline: number = a.deadline ?? Number.MAX_SAFE_INTEGER;
+        const bDeadline: number = b.deadline ?? Number.MAX_SAFE_INTEGER;
+        return aDeadline - bDeadline;
+      }
+      if (sortMode === 'deadlineDesc') {
+        // 期限なしは最後尾（0扱い）
+        const aDeadline: number = a.deadline ?? 0;
+        const bDeadline: number = b.deadline ?? 0;
+        return bDeadline - aDeadline;
+      }
+
+      // デフォルト: sortOrder順
       return a.sortOrder - b.sortOrder;
     });
     log('sort', {
@@ -768,7 +789,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       order: s.filter((t) => !t.parentId).map((t) => ({ title: t.title.slice(0, 10), done: !!t.done, sort: t.sortOrder })),
     });
     return s;
-  }, [todos]);
+  }, [todos, sortMode]);
 
   /** 凡例用：各カテゴリのタスク件数 */
   const legendCounts: { danger: number; inProgress: number; done: number } = useMemo((): { danger: number; inProgress: number; done: number } => {
@@ -2724,6 +2745,19 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           </span>
         </div>
         <div data-tutorial="view-mode-buttons" className={styles.viewModeButtons}>
+          <select
+            value={sortMode}
+            onChange={(e) => setSortMode(e.target.value as typeof sortMode)}
+            className={styles.input}
+            style={{ fontSize: 12, padding: '4px 6px', maxWidth: 130 }}
+            title="並び替え"
+          >
+            <option value="manual">手動順</option>
+            <option value="createdDesc">作成日 新→古</option>
+            <option value="createdAsc">作成日 古→新</option>
+            <option value="deadlineAsc">期限 近→遠</option>
+            <option value="deadlineDesc">期限 遠→近</option>
+          </select>
           {legendCounts.done > 0 && (
             <button
               type="button"
