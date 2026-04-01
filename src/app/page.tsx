@@ -4025,13 +4025,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               return;
             }
             const newActual: number = target.actualMin + minutes;
+            const now: number = Date.now();
             setTodos((prev) =>
-              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: Date.now() } : t)),
+              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: now } : t)),
             );
             fetch('/api/todos/' + id, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now() } }),
+              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: now } }),
+            });
+            // 作業ログにも記録
+            fetch('/api/todos/' + id + '/logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: `+${minutes}分 ポモドーロ作業` }),
             });
           }}
           workMinutes={settings.pomodoroWork ?? 25}
