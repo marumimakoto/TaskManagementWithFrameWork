@@ -35,9 +35,7 @@ interface ParetoItem {
 /** 種別ごとのラベルと色 */
 const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
   work_log: { label: '作業ログ', color: '#3b82f6' },
-  created: { label: '新規作成', color: '#22c55e' },
   completed: { label: '完了', color: '#a855f7' },
-  deleted: { label: '削除', color: '#ef4444' },
 };
 
 /**
@@ -53,7 +51,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const [toDate, setToDate] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'stats' | 'chart' | 'pareto'>('list');
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'created', 'completed']));
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'completed']));
   const [currentPage, setCurrentPage] = useState<number>(1);
   const PAGE_SIZE: number = 20;
 
@@ -441,9 +439,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
                 <div className={styles.statsHeaderRow}>
                   <span className={styles.statsHeaderCell}>日付</span>
                   <span className={styles.statsHeaderCell}>作業ログ</span>
-                  <span className={styles.statsHeaderCell}>新規作成</span>
                   <span className={styles.statsHeaderCell}>完了</span>
-                  <span className={styles.statsHeaderCell}>削除</span>
                   <span className={styles.statsHeaderCell}>作業時間</span>
                 </div>
                 {filteredStats.map((stat: DailyStat) => (
@@ -453,13 +449,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
                       {stat.workLogs > 0 ? stat.workLogs : '-'}
                     </span>
                     <span className={styles.statsCell}>
-                      {stat.created > 0 ? stat.created : '-'}
-                    </span>
-                    <span className={styles.statsCell}>
                       {stat.completed > 0 ? stat.completed : '-'}
-                    </span>
-                    <span className={styles.statsCell}>
-                      {stat.deleted > 0 ? stat.deleted : '-'}
                     </span>
                     <span className={styles.statsCell}>
                       {stat.workedMin > 0 ? minutesToText(stat.workedMin) : '-'}
