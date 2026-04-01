@@ -2699,6 +2699,8 @@
   /* 2行目: 予定実績 + バッジ + 期限 */
   /* 3行目: 実績入力 + ＋ + 削除 */
   .card {
+    -webkit-user-select: none;
+    user-select: none;
     display: grid !important;
     grid-template-columns: auto 1fr;
     grid-template-rows: auto auto auto;

@@ -9,6 +9,7 @@ interface ArchivedTodoRow {
   est_min: number;
   actual_min: number;
   detail: string;
+  category: string;
   deadline: number | null;
   done: number;
   created_at: number;
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     estMin: row.est_min,
     actualMin: row.actual_min,
     detail: row.detail || undefined,
+    category: row.category || '',
     deadline: row.deadline ?? undefined,
     done: row.done === 1,
     createdAt: row.created_at,

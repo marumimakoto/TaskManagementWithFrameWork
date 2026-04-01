@@ -13,6 +13,7 @@ interface TodoRow {
   deadline: number | null;
   recurrence: string;
   detail: string;
+  category: string;
   started: number;
   done: number;
   sort_order: number;
@@ -203,8 +204,8 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
 
   for (const t of doneTodos) {
     await db.run(
-      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.deadline, t.done, t.created_at, now
+      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, category, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      t.id, t.user_id, t.title, t.est_min, t.actual_min, t.detail, t.category ?? '', t.deadline, t.done, t.created_at, now
     );
     // 繰り返しルールの達成カウントをインクリメント
     if (t.recurrence && t.recurrence !== 'carry') {

@@ -137,6 +137,7 @@ async function initializeTables(c: Client): Promise<void> {
       est_min INTEGER NOT NULL DEFAULT 30,
       actual_min INTEGER NOT NULL DEFAULT 0,
       detail TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT '',
       deadline INTEGER,
       done INTEGER NOT NULL DEFAULT 0,
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),

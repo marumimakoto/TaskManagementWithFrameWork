@@ -23,6 +23,7 @@ interface ArchivedTodo {
   estMin: number;
   actualMin: number;
   detail?: string;
+  category?: string;
   deadline?: number;
   done: boolean;
   createdAt: number;
@@ -122,17 +123,9 @@ export default function CategoryStatsPanel({
       }
     }
 
-    // カテゴリ情報のルックアップマップ（todosのタイトルからカテゴリを取得）
-    const categoryByTitle: Map<string, string> = new Map();
-    for (const todo of todos) {
-      if (todo.category) {
-        categoryByTitle.set(todo.title, todo.category);
-      }
-    }
-
-    // アーカイブされたタスク（タイトルでカテゴリを照合、なければ未分類）
+    // アーカイブされたタスク（category直接参照）
     for (const archived of archivedTodos) {
-      const category: string = categoryByTitle.get(archived.title) || '未分類';
+      const category: string = archived.category || '未分類';
       result.push({
         id: archived.id,
         title: archived.title,

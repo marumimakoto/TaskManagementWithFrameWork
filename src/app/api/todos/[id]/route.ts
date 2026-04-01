@@ -150,14 +150,14 @@ export async function DELETE(
   const db = await getDb();
 
   // 削除前にタスク情報を取得してアーカイブに保存
-  const row = await db.get<{ id: string; user_id: string; title: string; est_min: number; actual_min: number; detail: string; deadline: number | null; done: number; created_at: number }>(
-    'SELECT id, user_id, title, est_min, actual_min, detail, deadline, done, created_at FROM todos WHERE id = ?', id
+  const row = await db.get<{ id: string; user_id: string; title: string; est_min: number; actual_min: number; detail: string; category: string; deadline: number | null; done: number; created_at: number }>(
+    'SELECT id, user_id, title, est_min, actual_min, detail, category, deadline, done, created_at FROM todos WHERE id = ?', id
   );
 
   if (row) {
     await db.run(
-      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.deadline, row.done, row.created_at, Date.now()
+      'INSERT OR REPLACE INTO archived_todos (id, user_id, title, est_min, actual_min, detail, category, deadline, done, created_at, archived_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      row.id, row.user_id, row.title, row.est_min, row.actual_min, row.detail, row.category ?? '', row.deadline, row.done, row.created_at, Date.now()
     );
 
     // ユーザーごとに100件を超えたら古い順に削除
