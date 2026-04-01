@@ -293,7 +293,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
               <div
                 key={`empty-${index}`}
                 style={{
-                  minHeight: '100px',
+                  minHeight: '140px',
                   borderRight: (index + 1) % 7 !== 0 ? '1px solid var(--card-border, #eee)' : 'none',
                   borderBottom: '1px solid var(--card-border, #eee)',
                   background: 'var(--card-bg, #f9f9f9)',
@@ -319,7 +319,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
                 setSelectedDateKey(dateKey);
               }}
               style={{
-                minHeight: '100px',
+                minHeight: '140px',
                 padding: '4px 6px',
                 cursor: 'pointer',
                 borderRight: !isSaturday ? '1px solid var(--card-border, #eee)' : 'none',
@@ -385,8 +385,8 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
                 )}
               </div>
 
-              {/* タスク名を最大2件まで表示 */}
-              {dayTodos.slice(0, 2).map((todo: Todo) => (
+              {/* タスク名を最大3件まで表示 */}
+              {dayTodos.slice(0, 3).map((todo: Todo) => (
                 <div
                   key={todo.id}
                   style={{
@@ -402,9 +402,9 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
                   {todo.title}
                 </div>
               ))}
-              {dayTodos.length > 2 && (
+              {dayTodos.length > 3 && (
                 <div style={{ fontSize: '10px', color: '#a0aec0' }}>
-                  +{dayTodos.length - 2}件
+                  +{dayTodos.length - 3}件
                 </div>
               )}
             </div>
