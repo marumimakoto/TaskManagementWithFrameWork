@@ -10,6 +10,7 @@ import {
   parseDeadline,
   toInputDeadline,
   formatDeadline,
+  formatDateShort,
   cardBgClass,
   loadSession,
   saveSession,
@@ -3452,6 +3453,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 </div>
               )}
 
+              {/* 作成日（作成日ソート時のみ表示） */}
+              {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                <div className={styles.taskDeadlineBig} style={{ color: 'var(--muted)', fontSize: 12 }}>
+                  作成: {formatDateShort(t.createdAt)}
+                </div>
+              )}
+
               {/* Right: actions */}
               <div className={styles.actions}>
                 <div className={styles.actionField}>
@@ -3595,6 +3603,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       {t.deadline ? formatDeadline(t.deadline) : '—'}
                     </span>
                   )}
+                  {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                    <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      {formatDateShort(t.createdAt)}
+                    </span>
+                  )}
                   <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
                 </div>
                 {isExpanded && renderExpandedContent(t)}
@@ -3661,6 +3674,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     {t.deadline ? formatDeadline(t.deadline) : '—'}
                   </span>
                 )}
+                {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                  <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                    {formatDateShort(t.createdAt)}
+                  </span>
+                )}
                 <button
                   onClick={(e) => { e.stopPropagation(); removeTodoWithUndo(t.id); }}
                   className={styles.dangerIconBtn}
@@ -3708,6 +3726,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               {t.deadline && (
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, paddingLeft: 30 }}>
                   期限: {formatDeadline(t.deadline)}
+                </div>
+              )}
+              {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, paddingLeft: 30 }}>
+                  作成: {formatDateShort(t.createdAt)}
                 </div>
               )}
               {/* 展開コンテンツ: クリックはヘッダーに伝播しない */}
