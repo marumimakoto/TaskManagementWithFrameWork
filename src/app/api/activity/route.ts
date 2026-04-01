@@ -69,7 +69,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const range = getRange();
   const entries: ActivityEntry[] = [];
 
-  // カテゴリ情報を事前に取得（全セクションで共有）
+  // カテゴリ情報を事前に取得（todos + archived_todos、全セクションで共有）
   const catMap: Map<string, string> = new Map();
   try {
     const catRows = await db.all<{ id: string; category: string }>('SELECT id, category FROM todos WHERE user_id = ?', userId);
@@ -77,6 +77,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       catMap.set(r.id, r.category || '');
     }
   } catch { /* category column may not exist */ }
+  try {
+    const archCatRows = await db.all<{ id: string; category: string }>('SELECT id, category FROM archived_todos WHERE user_id = ?', userId);
+    for (const r of archCatRows) {
+      if (!catMap.has(r.id)) {
+        catMap.set(r.id, r.category || '');
+      }
+    }
+  } catch { /* ignore */ }
 
   // 1. 作業ログ（削除済みタスクの作業ログも含む）
   try {
