@@ -1,8 +1,9 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppUser } from './types';
 import { minutesToText } from './utils';
+import { useIsMobile } from './useIsMobile';
 import { Pagination } from './SharedComponents';
 import styles from './page.module.css';
 
@@ -43,6 +44,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
  * 一覧モードと統計モードを切り替えて表示できる
  */
 export default function ActivityPanel({ user, isPro, onShowProModal }: { user: AppUser; isPro?: boolean; onShowProModal?: () => void }): React.ReactElement {
+  const isMobile: boolean = useIsMobile();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [paretoData, setParetoData] = useState<ParetoItem[]>([]);
@@ -378,6 +380,32 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
           })}
         </div>
       </section>
+
+      {/* エクスポートボタン（PC版のみ） */}
+      {!isMobile && filteredEntries.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
+          <button
+            type="button"
+            className={styles.iconBtn}
+            style={{ fontSize: 13 }}
+            onClick={() => {
+              const lines: string[] = filteredEntries.map((entry: ActivityEntry) => {
+                return `${entry.date}\t${entry.title}\t${entry.content}`;
+              });
+              const txt: string = lines.join('\n');
+              const blob: Blob = new Blob([txt], { type: 'text/plain' });
+              const url: string = URL.createObjectURL(blob);
+              const a: HTMLAnchorElement = document.createElement('a');
+              a.href = url;
+              a.download = 'activity-log.txt';
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+          >
+            エクスポート（TXT）
+          </button>
+        </div>
+      )}
 
       {loading && <p className={styles.diaryEmpty}>読み込み中...</p>}
 
