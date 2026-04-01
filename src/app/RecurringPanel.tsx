@@ -415,12 +415,6 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
                 <span style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent, #2563eb)' }}>
                   🔁 {recurrenceLabel(t.recurrence)}
                 </span>
-                {t.generatedCount > 0 && (
-                  <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>
-                    達成率: {t.completedCount}/{t.generatedCount}
-                    ({t.generatedCount > 0 ? Math.round((t.completedCount / t.generatedCount) * 100) : 0}%)
-                  </span>
-                )}
               </div>
 
               {t.detail && (
