@@ -2730,7 +2730,7 @@
   }
 
   .taskProgress {
-    font-size: 11px !important;
+    font-size: 10px !important;
     padding: 0 !important;
     white-space: nowrap;
   }
@@ -2749,11 +2749,31 @@
     display: none !important;
   }
 
-  /* 2行目: バッジ+期限+予定実績を横並び */
-  .card > span[class*="badge"],
-  .card > div[class*="taskDeadline"] {
+  /* 2行目: 予定実績+バッジ+期限を1行に */
+  .cardLeft {
+    grid-row: 1 / 3;
+    grid-column: 2;
+  }
+
+  .card > span[class*="badge"] {
     grid-row: 2;
-    font-size: 11px !important;
+    font-size: 10px !important;
+    padding: 2px 4px !important;
+    white-space: nowrap;
+  }
+
+  .card > div[class*="taskDeadline"],
+  .taskDeadlineBig {
+    grid-row: 2;
+    font-size: 10px !important;
+    padding: 1px 3px !important;
+    min-width: auto !important;
+    white-space: nowrap;
+  }
+
+  .badgeOk, .badgeNg {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
   }
 
   /* 3行目: 実績入力+ボタン+削除 */
