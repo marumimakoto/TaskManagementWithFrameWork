@@ -3098,16 +3098,17 @@
   }
 
   .card {
-    padding: 10px 12px;
-    font-size: 14px;
+    padding: 5px 6px;
+    font-size: 13px;
+    gap: 4px;
   }
 
   .cardTitle {
-    font-size: 15px;
+    font-size: 14px;
   }
 
   .cardDeadline {
-    font-size: 14px;
+    font-size: 12px;
   }
 
   .input,
@@ -3130,6 +3131,35 @@
   .menuPanel {
     width: 85vw;
     max-width: 320px;
+  }
+
+  .taskDetail {
+    display: none;
+  }
+
+  .taskDetailExpanded {
+    display: block;
+    font-size: 12px;
+  }
+
+  .taskProgress {
+    font-size: 12px;
+    padding: 0 4px;
+  }
+
+  .checkbox {
+    width: 18px;
+    height: 18px;
+  }
+
+  .inputNarrow {
+    width: 50px;
+    padding: 4px;
+    font-size: 12px;
+  }
+
+  .actions {
+    gap: 3px;
   }
 
   .todoListGrid {
