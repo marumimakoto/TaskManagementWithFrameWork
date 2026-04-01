@@ -263,7 +263,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
   }
 
   return (
-    <div style={{ padding: '8px', maxWidth: '100%', margin: '0 auto' }}>
+    <div style={{ padding: '8px', maxWidth: '100%', margin: '0 auto', overflowX: 'auto' }}>
       {/* ヘッダー: 前月 / 年月表示 / 次月 */}
       <div
         style={{
@@ -346,10 +346,11 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
       <div
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(7, 1fr)',
+          gridTemplateColumns: 'repeat(7, minmax(50px, 1fr))',
           border: '1px solid var(--card-border, #ccc)',
           borderRadius: '8px',
           overflow: 'hidden',
+          minWidth: '350px',
         }}
       >
         {calendarCells.map((day: number | null, index: number) => {

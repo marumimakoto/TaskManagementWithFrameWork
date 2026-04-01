@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
 import { minutesToText, uid } from './utils';
+import { useIsMobile } from './useIsMobile';
 import styles from './page.module.css';
 import RecurrenceSelector from './RecurrenceSelector';
 
@@ -62,6 +63,7 @@ function recurrenceLabel(rec: string): string {
  * 繰り返しタスク一覧・編集ページ
  */
 export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onRefresh: () => void }): React.ReactElement {
+  const isMobile: boolean = useIsMobile();
   const [items, setItems] = useState<RecurringTodo[]>(() => {
     try {
       const cached: string | null = localStorage.getItem('kiroku:recurring:' + user.id);
@@ -426,7 +428,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                       checked={calendarFlags[t.id] !== false}
                       onChange={() => toggleCalendarFlag(t.id)}
                     />
-                    📅カレンダー
+                    {isMobile ? '📅' : '📅カレンダー'}
                   </label>
                   <button
                     type="button"

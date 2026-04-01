@@ -183,10 +183,14 @@
   margin-bottom: 16px;
 }
 
+.headerTitleGroup {
+  flex: 1;
+  min-width: 0;
+}
+
 .headerTitle {
   font-size: 22px;
   margin: 0;
-  flex: 1;
 }
 
 /* ===== Hamburger ===== */
@@ -2537,6 +2541,8 @@
 
 .workLogArea {
   grid-column: 1 / -1;
+  width: 100%;
+  flex-basis: 100%;
   border-top: 1px solid #e5e7eb;
   margin-top: 8px;
   padding-top: 10px;
@@ -2544,8 +2550,17 @@
 
 .workLogInputRow {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
   margin-bottom: 8px;
+  width: 100%;
+}
+
+.workLogInputTop {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .workLogList {
@@ -2900,7 +2915,12 @@
   /* 作業ログ入力行 */
   .workLogInputRow {
     flex-direction: column;
-    gap: 6px;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .workLogInputTop {
+    width: 100%;
   }
 
   /* 執事 */

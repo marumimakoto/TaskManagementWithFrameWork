@@ -1892,14 +1892,23 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           </a>
         </div>
         <div className={styles.workLogInputRow}>
-          <input
-            type="date"
-            value={actualDateInputs[t.id] ?? ''}
-            onChange={(e) =>
-              setActualDateInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
-            }
-            className={styles.inputDate}
-          />
+          <div className={styles.workLogInputTop}>
+            <input
+              type="date"
+              value={actualDateInputs[t.id] ?? ''}
+              onChange={(e) =>
+                setActualDateInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
+              }
+              className={styles.inputDate}
+            />
+            <button
+              type="button"
+              onClick={() => addWorkLog(t.id)}
+              className={styles.iconBtn}
+            >
+              記録
+            </button>
+          </div>
           <textarea
             placeholder="やったことを記録...（Ctrl+Enterで記録、Shift+Enterで改行）"
             value={logInput}
@@ -1912,15 +1921,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             }}
             className={styles.input}
             rows={2}
-            style={{ resize: 'vertical' }}
+            style={{ resize: 'vertical', width: '100%' }}
           />
-          <button
-            type="button"
-            onClick={() => addWorkLog(t.id)}
-            className={styles.iconBtn}
-          >
-            記録
-          </button>
         </div>
         {showLogId === t.id && (
           (workLogs[t.id] ?? []).length > 0 ? (
@@ -2133,6 +2135,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   return (
     <main className={`${styles.main} ${isMobile ? styles.mobileContent : ''}`}>
       <header className={styles.topBar}>
+        <div className={styles.headerTitleGroup}>
         <h1 className={styles.headerTitle}>
           {activeTab === 'tasks' ? 'タスク' : activeTab === 'today' ? '今日やること' : activeTab === 'calendar' ? 'カレンダー' : activeTab === 'task-sets' ? 'タスクセット' : activeTab === 'matrix' ? 'アイゼンハワーマトリクス' : activeTab === 'activity' ? '作業記録' : activeTab === 'category-stats' ? 'カテゴリ別実績' : activeTab === 'archived' ? '削除したタスク' : activeTab === 'diary-write' ? '日記を書く' : activeTab === 'diary-view' ? '日記を見る' : activeTab === 'diary-public' ? 'みんなの日記' : activeTab === 'bucket-list' ? 'やりたいことリスト' : activeTab === 'mypage' ? 'マイページ' : activeTab === 'help' ? 'ヘルプ' : activeTab === 'bug-report' ? 'バグ報告' : activeTab === 'admin' ? '管理' : activeTab === 'recurring' ? '繰り返しタスク' : '設定'}
         </h1>
@@ -2156,6 +2159,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
            activeTab === 'recurring' ? '繰り返しルールの管理・達成率' :
            activeTab === 'settings' ? '表示・執事・Welcomeの設定' : ''}
         </p>
+        </div>
         <div className={styles.userBar}>
           <span className={styles.userName}>{user.name}</span>
           <button type="button" onClick={onLogout} className={styles.iconBtn}>
