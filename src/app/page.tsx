@@ -1108,6 +1108,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       }),
     ]);
 
+    setSortMode('manual');
     log('moveTodo', { todoId, direction });
   }
 
@@ -2838,6 +2839,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           e.preventDefault();
           if (dragId) {
             changeParent(dragId, null);
+            setSortMode('manual');
           }
           isDraggingRef.current = false;
           setDragId(null);
@@ -2928,6 +2930,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
                     });
+                    setSortMode('manual');
                   }
                   isDraggingRef.current = false;
                   setDragId(null);
@@ -2960,6 +2963,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     const parentTask: Todo | undefined = thisTask?.parentId ? todos.find((todo) => todo.id === thisTask.parentId) : undefined;
                     const grandParentId: string | null = parentTask?.parentId ?? null;
                     changeParent(dragId, grandParentId);
+                    setSortMode('manual');
                   }
                   isDraggingRef.current = false;
                   setDragId(null);
@@ -3125,6 +3129,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       }),
                     );
                     persistSortOrders(updates, rollback);
+                    setSortMode('manual');
                   }
                   setTouchDragId(null);
                   setTouchDragY(0);
@@ -3211,6 +3216,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     }),
                   );
                   persistSortOrders(updates, rollback);
+                  setSortMode('manual');
                 }
                 isDraggingRef.current = false;
                 setDragId(null);
@@ -3523,6 +3529,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ updates: { parentId: newParentId, sortOrder: newOrder } }),
                     });
+                    setSortMode('manual');
                   }
                   isDraggingRef.current = false;
                   setDragId(null);
