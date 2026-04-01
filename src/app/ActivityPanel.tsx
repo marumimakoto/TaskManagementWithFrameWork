@@ -76,52 +76,29 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         url += '&to=' + to;
       }
       const res: Response = await fetch(url);
-      const data: { entries: ActivityEntry[]; dailyStats: DailyStat[]; paretoData: ParetoItem[]; dailyCategoryStats?: { date: string; total: number; byCategory: Record<string, number> }[] } = await res.json();
+      const data: {
+        entries: ActivityEntry[];
+        dailyStats: DailyStat[];
+        paretoData: ParetoItem[];
+        dailyCategoryStats?: { date: string; total: number; byCategory: Record<string, number> }[];
+        categorySummary?: { category: string; totalMin: number }[];
+        userCategories?: string[];
+      } = await res.json();
       setEntries(data.entries ?? []);
       setDailyStats(data.dailyStats ?? []);
       setParetoData(data.paretoData ?? []);
-      // APIからwork_logsベースの日別カテゴリデータを受け取る
       if (data.dailyCategoryStats && data.dailyCategoryStats.length > 0) {
         setDailyCategoryData(data.dailyCategoryStats);
       }
-
-      // カテゴリ別実績を集計（todosとアーカイブから）
-      try {
-        const [todosRes, archiveRes, catListRes] = await Promise.all([
-          fetch('/api/todos?userId=' + user.id),
-          fetch('/api/todos/archive?userId=' + user.id),
-          fetch('/api/todo-categories?userId=' + user.id),
-        ]);
-        const todosRaw = await todosRes.json();
-        const archivedRaw = await archiveRes.json();
-        const todos: Record<string, unknown>[] = Array.isArray(todosRaw) ? todosRaw : [];
-        const archived: Record<string, unknown>[] = Array.isArray(archivedRaw) ? archivedRaw : [];
-
-        // ユーザー定義カテゴリ一覧を取得
-        const catListRaw = await catListRes.json();
-        const catList: { id: string; name: string }[] = Array.isArray(catListRaw) ? catListRaw : [];
-        const userCategories: string[] = catList.map((c: { id: string; name: string }) => c.name);
-
-        const catMap: Map<string, number> = new Map();
-        for (const t of [...todos, ...archived]) {
-          const cat: string = (t.category as string) || '未分類';
-          catMap.set(cat, (catMap.get(cat) ?? 0) + ((t.actualMin as number) ?? 0));
-        }
-        const catData: { category: string; totalMin: number }[] = [...catMap.entries()]
-          .map(([category, totalMin]) => ({ category, totalMin }))
-          .filter((d) => d.totalMin > 0)
-          .sort((a, b) => b.totalMin - a.totalMin);
-        setCategoryData(catData);
-
-        // allCategories: ユーザー定義カテゴリ + 実績にあるカテゴリをマージ
-        const catSet: Set<string> = new Set<string>(userCategories);
-        for (const d of catData) {
-          catSet.add(d.category);
-        }
-        setAllCategories([...catSet]);
-
-        // 日別×カテゴリの集計はAPIのdailyCategoryStats（work_logsベース）を使用
-      } catch (catErr) { console.warn('[activity] category fetch failed:', catErr); }
+      // カテゴリ別実績（APIから一括取得）
+      const catData: { category: string; totalMin: number }[] = data.categorySummary ?? [];
+      setCategoryData(catData);
+      // allCategories: ユーザー定義カテゴリ + 実績にあるカテゴリをマージ
+      const catSet: Set<string> = new Set<string>(data.userCategories ?? []);
+      for (const d of catData) {
+        catSet.add(d.category);
+      }
+      setAllCategories([...catSet]);
     } catch (e) {
       console.warn('Failed to fetch activity', e);
     } finally {

@@ -329,5 +329,32 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .map(([title, actualMin]) => ({ title, actualMin }))
     .sort((a, b) => b.actualMin - a.actualMin);
 
-  return NextResponse.json({ entries, dailyStats, paretoData, dailyCategoryStats });
+  // カテゴリ別実績（棒グラフ用）: catMapからカテゴリごとのactualMin合計を集計
+  const categorySummary: { category: string; totalMin: number }[] = [];
+  try {
+    const catTotalMap: Map<string, number> = new Map();
+    const allTasksForCat = await db.all<{ category: string; actual_min: number }>(
+      `SELECT category, actual_min FROM todos WHERE user_id = ? AND actual_min > 0
+       UNION ALL
+       SELECT category, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0`,
+      userId, userId
+    );
+    for (const t of allTasksForCat) {
+      const cat: string = t.category || '未分類';
+      catTotalMap.set(cat, (catTotalMap.get(cat) ?? 0) + t.actual_min);
+    }
+    for (const [category, totalMin] of catTotalMap) {
+      categorySummary.push({ category, totalMin });
+    }
+    categorySummary.sort((a, b) => b.totalMin - a.totalMin);
+  } catch { /* ignore */ }
+
+  // ユーザー定義カテゴリ一覧
+  let userCategories: string[] = [];
+  try {
+    const catRows = await db.all<{ name: string }>('SELECT name FROM todo_categories WHERE user_id = ? ORDER BY sort_order ASC', userId);
+    userCategories = catRows.map((r) => r.name);
+  } catch { /* ignore */ }
+
+  return NextResponse.json({ entries, dailyStats, paretoData, dailyCategoryStats, categorySummary, userCategories });
 }
