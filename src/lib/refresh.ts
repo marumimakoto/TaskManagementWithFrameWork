@@ -179,6 +179,7 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     est_min: number;
     detail: string;
     recurrence: string;
+    category: string;
     deadline_offset_days: number | null;
   }
 
@@ -212,8 +213,8 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
       deadline = d.getTime();
     }
     await db.run(
-      'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      newId, userId, rule.title, rule.est_min, rule.recurrence, rule.detail, deadline, now
+      'INSERT INTO todos (id, user_id, title, est_min, recurrence, detail, category, deadline, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      newId, userId, rule.title, rule.est_min, rule.recurrence, rule.detail, rule.category ?? '', deadline, now
     );
     existingTitles.add(rule.title);
     addedCount++;

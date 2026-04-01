@@ -14,6 +14,7 @@ interface RecurringTodo {
   estMin: number;
   recurrence: string;
   detail?: string;
+  category: string;
   deadlineOffsetDays?: number | null;
   generatedCount: number;
   completedCount: number;
@@ -62,7 +63,7 @@ function recurrenceLabel(rec: string): string {
 /**
  * 繰り返しタスク一覧・編集ページ
  */
-export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onRefresh: () => void }): React.ReactElement {
+export default function RecurringPanel({ user, onRefresh, categories = [] }: { user: AppUser; onRefresh: () => void; categories?: string[] }): React.ReactElement {
   const isMobile: boolean = useIsMobile();
   const [items, setItems] = useState<RecurringTodo[]>(() => {
     try {
@@ -406,6 +407,11 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                   有効
                 </span>
                 <span className={styles.archiveTitle}>{t.title}</span>
+                {t.category && (
+                  <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                    {t.category}
+                  </span>
+                )}
                 <span style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent, #2563eb)' }}>
                   🔁 {recurrenceLabel(t.recurrence)}
                 </span>
@@ -425,6 +431,30 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
 
               {editingId === t.id ? (
                 <div style={{ marginTop: 8 }}>
+                  {categories.length > 0 && (
+                    <div style={{ marginBottom: 8 }}>
+                      <label style={{ fontSize: 12, color: 'var(--muted)' }}>カテゴリ</label>
+                      <select
+                        value={t.category || ''}
+                        onChange={async (e) => {
+                          const newCat: string = e.target.value;
+                          await fetch('/api/todos/recurring', {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ id: t.id, updates: { category: newCat } }),
+                          });
+                          setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: newCat } : r));
+                        }}
+                        className={styles.input}
+                        style={{ fontSize: 13 }}
+                      >
+                        <option value="">なし</option>
+                        {categories.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <RecurrenceSelector
                     value={editRecurrence}
                     onChange={(v) => {
@@ -470,6 +500,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                         stuckHours: 0,
                         recurrence: t.recurrence,
                         detail: t.detail ?? '',
+                        category: t.category || '',
                         deadline,
                         started: false,
                         done: false,

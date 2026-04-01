@@ -125,8 +125,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         }
         const ruleId: string = crypto.randomUUID();
         await db.run(
-          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)',
-          ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence, deadlineOffsetDays
+          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, category, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)',
+          ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence, todo.category ?? '', deadlineOffsetDays
         );
       }
     } catch (recurringError) {

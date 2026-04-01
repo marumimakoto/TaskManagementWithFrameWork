@@ -3757,7 +3757,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'recurring' && (
-        <RecurringPanel user={user} onRefresh={fetchTodos} />
+        <RecurringPanel user={user} onRefresh={fetchTodos} categories={todoCategories.map((c: { id: string; name: string }) => c.name)} />
       )}
 
       {(activeTab === 'diary-write' || activeTab === 'diary-view' || activeTab === 'diary-public') && (

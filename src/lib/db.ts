@@ -246,6 +246,7 @@ async function initializeTables(c: Client): Promise<void> {
       est_min INTEGER NOT NULL DEFAULT 30,
       detail TEXT NOT NULL DEFAULT '',
       recurrence TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT '',
       deadline_offset_days INTEGER,
       enabled INTEGER NOT NULL DEFAULT 1,
       generated_count INTEGER NOT NULL DEFAULT 0,
@@ -316,6 +317,7 @@ async function initializeTables(c: Client): Promise<void> {
     "ALTER TABLE user_settings ADD COLUMN pomodoro_break INTEGER NOT NULL DEFAULT 5",
     "ALTER TABLE archived_todos ADD COLUMN category TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE user_settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo'",
+    "ALTER TABLE recurring_rules ADD COLUMN category TEXT NOT NULL DEFAULT ''",
   ];
   for (const sql of migrations) {
     try {

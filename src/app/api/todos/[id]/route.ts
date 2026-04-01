@@ -85,8 +85,8 @@ export async function PUT(
 
   // UPDATE前に旧データを取得（繰り返し設定の変更判定用）
   const oldTodo = updates.recurrence !== undefined
-    ? await db.get<{ user_id: string; title: string; est_min: number; detail: string; deadline: number | null; recurrence: string }>(
-        'SELECT user_id, title, est_min, detail, deadline, recurrence FROM todos WHERE id = ?', id
+    ? await db.get<{ user_id: string; title: string; est_min: number; detail: string; category: string; deadline: number | null; recurrence: string }>(
+        'SELECT user_id, title, est_min, detail, category, deadline, recurrence FROM todos WHERE id = ?', id
       )
     : null;
 
@@ -120,8 +120,8 @@ export async function PUT(
           }
           const ruleId: string = crypto.randomUUID();
           await db.run(
-            'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)',
-            ruleId, oldTodo.user_id, oldTodo.title, oldTodo.est_min, oldTodo.detail, updates.recurrence, deadlineOffsetDays
+            'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, category, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0)',
+            ruleId, oldTodo.user_id, oldTodo.title, oldTodo.est_min, oldTodo.detail, updates.recurrence, oldTodo.category ?? '', deadlineOffsetDays
           );
           console.log('[recurring-debug] inserted rule:', { ruleId, title: oldTodo.title, recurrence: updates.recurrence });
         }
