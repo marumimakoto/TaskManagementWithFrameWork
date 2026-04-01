@@ -2612,6 +2612,18 @@
   white-space: nowrap;
 }
 
+/* ===== Narrow PC (max-width: 1024px) ===== */
+
+@media (max-width: 1024px) {
+  .taskDetail {
+    display: none;
+  }
+
+  .taskDetailExpanded {
+    display: block;
+  }
+}
+
 /* ===== Mobile Responsive (max-width: 768px) ===== */
 
 @media (max-width: 768px) {
