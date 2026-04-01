@@ -106,28 +106,31 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   // 繰り返し設定がある場合はrecurring_rulesに登録（既に同タイトル・同ルールがなければ）
   if (todo.recurrence && todo.recurrence !== 'carry') {
-    const existing = await db.get<{ id: string }>(
-      'SELECT id FROM recurring_rules WHERE user_id = ? AND title = ? AND recurrence = ? AND enabled = 1',
-      userId, todo.title, todo.recurrence
-    );
-    if (!existing) {
-      // 期限オフセット: 期限が設定されていれば「期限 - 作成日」の日数を保存
-      let deadlineOffsetDays: number | null = null;
-      if (todo.deadline) {
-        const nowDate: Date = new Date();
-        nowDate.setHours(0, 0, 0, 0);
-        const deadlineDate: Date = new Date(todo.deadline);
-        deadlineDate.setHours(0, 0, 0, 0);
-        deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
-        if (deadlineOffsetDays < 0) {
-          deadlineOffsetDays = 0;
-        }
-      }
-      const ruleId: string = crypto.randomUUID();
-      await db.run(
-        'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence, deadlineOffsetDays
+    try {
+      const existing = await db.get<{ id: string }>(
+        'SELECT id FROM recurring_rules WHERE user_id = ? AND title = ? AND recurrence = ? AND enabled = 1',
+        userId, todo.title, todo.recurrence
       );
+      if (!existing) {
+        let deadlineOffsetDays: number | null = null;
+        if (todo.deadline) {
+          const nowDate: Date = new Date();
+          nowDate.setHours(0, 0, 0, 0);
+          const deadlineDate: Date = new Date(todo.deadline);
+          deadlineDate.setHours(0, 0, 0, 0);
+          deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
+          if (deadlineOffsetDays < 0) {
+            deadlineOffsetDays = 0;
+          }
+        }
+        const ruleId: string = crypto.randomUUID();
+        await db.run(
+          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)',
+          ruleId, userId, todo.title, todo.estMin, todo.detail ?? '', todo.recurrence, deadlineOffsetDays
+        );
+      }
+    } catch (recurringError) {
+      console.error('[recurring] failed to insert rule:', recurringError);
     }
   }
 

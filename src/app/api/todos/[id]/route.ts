@@ -97,31 +97,37 @@ export async function PUT(
   if (updates.recurrence !== undefined && oldTodo) {
     console.log('[recurring-debug]', { newRec: updates.recurrence, oldRec: oldTodo.recurrence, changed: updates.recurrence !== oldTodo.recurrence });
     if (updates.recurrence !== oldTodo.recurrence) {
-      // 繰り返し設定が実際に変わった場合のみ、既存ルール（同タイトル）を無効化
-      await db.run(
-        'UPDATE recurring_rules SET enabled = 0 WHERE user_id = ? AND title = ?',
-        oldTodo.user_id, oldTodo.title
-      );
-      // 新しいルールがcarry以外なら登録
-      if (updates.recurrence !== 'carry') {
-        // 期限オフセット: 期限が設定されていれば「期限 - 今日」の日数を保存
-        let deadlineOffsetDays: number | null = null;
-        const currentDeadline: number | null = updates.deadline !== undefined ? (updates.deadline as number | null) : oldTodo.deadline;
-        if (currentDeadline) {
-          const nowDate: Date = new Date();
-          nowDate.setHours(0, 0, 0, 0);
-          const deadlineDate: Date = new Date(currentDeadline);
-          deadlineDate.setHours(0, 0, 0, 0);
-          deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
-          if (deadlineOffsetDays < 0) {
-            deadlineOffsetDays = 0;
-          }
-        }
-        const ruleId: string = crypto.randomUUID();
+      try {
+        // 繰り返し設定が実際に変わった場合のみ、既存ルール（同タイトル）を無効化
         await db.run(
-          'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          ruleId, oldTodo.user_id, oldTodo.title, oldTodo.est_min, oldTodo.detail, updates.recurrence, deadlineOffsetDays
+          'UPDATE recurring_rules SET enabled = 0 WHERE user_id = ? AND title = ?',
+          oldTodo.user_id, oldTodo.title
         );
+        // 新しいルールがcarry以外なら登録
+        if (updates.recurrence !== 'carry') {
+          // 期限オフセット: 期限が設定されていれば「期限 - 今日」の日数を保存
+          let deadlineOffsetDays: number | null = null;
+          const currentDeadline: number | null = updates.deadline !== undefined ? (updates.deadline as number | null) : oldTodo.deadline;
+          if (currentDeadline) {
+            const nowDate: Date = new Date();
+            nowDate.setHours(0, 0, 0, 0);
+            const deadlineDate: Date = new Date(currentDeadline);
+            deadlineDate.setHours(0, 0, 0, 0);
+            deadlineOffsetDays = Math.round((deadlineDate.getTime() - nowDate.getTime()) / 86400000);
+            if (deadlineOffsetDays < 0) {
+              deadlineOffsetDays = 0;
+            }
+          }
+          const ruleId: string = crypto.randomUUID();
+          await db.run(
+            'INSERT INTO recurring_rules (id, user_id, title, est_min, detail, recurrence, deadline_offset_days, generated_count, completed_count) VALUES (?, ?, ?, ?, ?, ?, ?, 0, 0)',
+            ruleId, oldTodo.user_id, oldTodo.title, oldTodo.est_min, oldTodo.detail, updates.recurrence, deadlineOffsetDays
+          );
+          console.log('[recurring-debug] inserted rule:', { ruleId, title: oldTodo.title, recurrence: updates.recurrence });
+        }
+      } catch (recurringError) {
+        console.error('[recurring-debug] failed to update recurring_rules:', recurringError);
+        // 繰り返しルールの更新に失敗してもタスク更新自体は成功させる
       }
     }
   }
