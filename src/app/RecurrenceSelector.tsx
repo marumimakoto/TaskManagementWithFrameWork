@@ -105,29 +105,48 @@ export default function RecurrenceSelector({
     return 'carry';
   }
 
+  const presets: { value: string; label: string }[] = [
+    { value: 'carry', label: '繰り返さない' },
+    { value: 'day', label: '毎日' },
+    { value: 'week:weekday', label: '毎週平日' },
+    { value: `week:${todayDayKey}`, label: `毎週${todayDayName}曜` },
+    { value: 'month:same-date', label: '毎月' },
+    { value: 'year', label: '毎年' },
+    { value: 'custom', label: 'カスタム' },
+  ];
+
+  const currentPreset: string = customMode ? 'custom' : value;
+
   return (
     <div>
-      <select
-        value={customMode ? 'custom' : value}
-        onChange={(e) => {
-          const v: string = e.target.value;
-          if (v === 'custom') {
-            setCustomMode(true);
-          } else {
-            setCustomMode(false);
-            onChange(v);
-          }
-        }}
-        className={styles.input}
-      >
-        <option value="carry">繰り返さない</option>
-        <option value="day">毎日</option>
-        <option value="week:weekday">毎週平日（月〜金）</option>
-        <option value={`week:${todayDayKey}`}>毎週{todayDayName}曜日</option>
-        <option value="month:same-date">毎月同じ日</option>
-        <option value="year">毎年同じ日</option>
-        <option value="custom">カスタム...</option>
-      </select>
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+        {presets.map((p) => {
+          const isActive: boolean = currentPreset === p.value;
+          return (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => {
+                if (p.value === 'custom') {
+                  setCustomMode(true);
+                } else {
+                  setCustomMode(false);
+                  onChange(p.value);
+                }
+              }}
+              style={{
+                padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
+                border: isActive ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                background: isActive ? '#dbeafe' : 'var(--card-bg)',
+                color: isActive ? '#1d4ed8' : 'var(--foreground)',
+                fontWeight: isActive ? 600 : 400,
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
+      </div>
 
       {customMode && (
         <div style={{ display: 'grid', gap: 6, marginTop: 6, padding: 10, border: '1px solid var(--input-border)', borderRadius: 8, background: 'var(--background)' }}>
