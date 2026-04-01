@@ -28,14 +28,16 @@ export default function PomodoroTimer({
 }): React.ReactElement {
   const WORK_SECONDS: number = workMinutes * 60;
   const BREAK_SECONDS: number = breakMinutes * 60;
-  const [phase, setPhase] = useState<'work' | 'break'>('work');
   const [secondsLeft, setSecondsLeft] = useState<number>(WORK_SECONDS);
   const [running, setRunning] = useState<boolean>(false);
-  const [elapsed, setElapsed] = useState<number>(0);
+  const [totalElapsed, setTotalElapsed] = useState<number>(0);
+  const [overtime, setOvertime] = useState<boolean>(false);
+  const [overtimeSeconds, setOvertimeSeconds] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
+  const alarmIntervalRef = useRef<number | null>(null);
 
-  /** Web Audio APIでアラーム音を鳴らす */
-  function playAlarm(): void {
+  /** Web Audio APIでアラーム音を1回鳴らす */
+  function playAlarmOnce(): void {
     try {
       const ctx: AudioContext = new AudioContext();
       const frequencies: number[] = [523, 659, 784, 1047];
@@ -56,24 +58,43 @@ export default function PomodoroTimer({
     }
   }
 
+  /** アラームを繰り返し鳴らす（2秒間隔） */
+  function startAlarmLoop(): void {
+    if (alarmIntervalRef.current) {
+      return;
+    }
+    playAlarmOnce();
+    alarmIntervalRef.current = window.setInterval(() => {
+      playAlarmOnce();
+    }, 2000);
+  }
+
+  /** アラームを停止する */
+  function stopAlarmLoop(): void {
+    if (alarmIntervalRef.current) {
+      window.clearInterval(alarmIntervalRef.current);
+      alarmIntervalRef.current = null;
+    }
+  }
+
   useEffect(() => {
     if (running) {
       intervalRef.current = window.setInterval(() => {
-        setSecondsLeft((prev) => {
-          if (prev <= 1) {
-            // フェーズ終了 → アラームを鳴らす
-            playAlarm();
-            if (phase === 'work') {
-              setElapsed((e) => e + WORK_SECONDS);
-              setPhase('break');
-              return BREAK_SECONDS;
-            } else {
-              setPhase('work');
-              return WORK_SECONDS;
+        setTotalElapsed((prev) => prev + 1);
+        if (overtime) {
+          setOvertimeSeconds((prev) => prev + 1);
+        } else {
+          setSecondsLeft((prev) => {
+            if (prev <= 1) {
+              // 時間終了 → 超過モードに移行、アラーム開始
+              setOvertime(true);
+              setOvertimeSeconds(0);
+              startAlarmLoop();
+              return 0;
             }
-          }
-          return prev - 1;
-        });
+            return prev - 1;
+          });
+        }
       }, 1000);
     }
     return () => {
@@ -81,30 +102,46 @@ export default function PomodoroTimer({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [running, phase]);
+  }, [running, overtime]);
+
+  // コンポーネントアンマウント時にアラーム停止
+  useEffect(() => {
+    return () => {
+      stopAlarmLoop();
+    };
+  }, []);
+
+  /** アラームを止めて次のフェーズへ（または続行） */
+  function acknowledgeAlarm(): void {
+    stopAlarmLoop();
+    setOvertime(false);
+    setOvertimeSeconds(0);
+    setSecondsLeft(BREAK_SECONDS);
+  }
 
   /** 閉じるときに経過分を実績に加算 */
   function handleClose(): void {
     if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
     }
-    const totalWorked: number = elapsed + (phase === 'work' ? WORK_SECONDS - secondsLeft : 0);
-    const minutes: number = Math.round(totalWorked / 60);
+    stopAlarmLoop();
+    const minutes: number = Math.round(totalElapsed / 60);
     if (minutes > 0) {
       onAddMinutes(minutes);
     }
     onClose();
   }
 
-  const min: number = Math.floor(secondsLeft / 60);
-  const sec: number = secondsLeft % 60;
-  const display: string = `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  const displaySeconds: number = overtime ? overtimeSeconds : secondsLeft;
+  const min: number = Math.floor(displaySeconds / 60);
+  const sec: number = displaySeconds % 60;
+  const display: string = `${overtime ? '+' : ''}${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 
   return (
     <div className={styles.pomodoroOverlay}>
       <div className={styles.pomodoroContent}>
-        <div className={styles.pomodoroPhase}>
-          {phase === 'work' ? '作業中' : '休憩中'}
+        <div className={styles.pomodoroPhase} style={overtime ? { color: '#ef4444', animation: 'pulse 1s infinite' } : {}}>
+          {overtime ? '⏰ 時間超過！' : '作業中'}
         </div>
         <h2 className={styles.pomodoroTitle}>{todo.title}</h2>
         <p className={styles.pomodoroInfo}>
@@ -112,7 +149,11 @@ export default function PomodoroTimer({
         </p>
         <div className={styles.pomodoroTimer}>{display}</div>
         <div className={styles.pomodoroControls}>
-          {!running ? (
+          {overtime ? (
+            <button type="button" onClick={acknowledgeAlarm} className={styles.primaryBtn}>
+              🔕 アラーム停止 → 休憩へ
+            </button>
+          ) : !running ? (
             <button type="button" onClick={() => setRunning(true)} className={styles.primaryBtn}>
               スタート
             </button>
@@ -126,7 +167,7 @@ export default function PomodoroTimer({
           </button>
         </div>
         <p className={styles.pomodoroElapsed}>
-          この作業で {Math.round((elapsed + (phase === 'work' ? WORK_SECONDS - secondsLeft : 0)) / 60)} 分経過
+          この作業で {Math.round(totalElapsed / 60)} 分経過
         </p>
       </div>
     </div>
