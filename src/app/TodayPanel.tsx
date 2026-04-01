@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import type { Todo } from './types';
 import { minutesToText, formatDeadline } from './utils';
 import styles from './page.module.css';
@@ -31,8 +31,14 @@ export default function TodayPanel({
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
+  const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function startEdit(t: Todo, field: string): void {
+    // ダブルクリック時にシングルクリック（閉じる）をキャンセル
+    if (clickTimerRef.current) {
+      clearTimeout(clickTimerRef.current);
+      clickTimerRef.current = null;
+    }
     setEditingTodoId(t.id);
     setEditingField(field);
     if (field === 'title') {
@@ -105,7 +111,22 @@ export default function TodayPanel({
         {/* ヘッダー */}
         <div
           style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}
-          onClick={() => setExpandedId(isExpanded ? null : t.id)}
+          onClick={() => {
+            // 展開中はダブルクリック編集と干渉しないように遅延
+            if (isExpanded) {
+              if (clickTimerRef.current) {
+                clearTimeout(clickTimerRef.current);
+                clickTimerRef.current = null;
+                return;
+              }
+              clickTimerRef.current = setTimeout(() => {
+                setExpandedId(null);
+                clickTimerRef.current = null;
+              }, 250);
+            } else {
+              setExpandedId(t.id);
+            }
+          }}
         >
           <input
             type="checkbox"
