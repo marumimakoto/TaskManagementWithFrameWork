@@ -67,6 +67,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [editRecurrence, setEditRecurrence] = useState<string>('daily');
   const [message, setMessage] = useState<string>('');
   const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
+  const [recurringView, setRecurringView] = useState<'rules' | 'stats'>('rules');
 
   const fetchItems = useCallback(async (): Promise<void> => {
     try {
@@ -155,9 +156,31 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
     return <p className={styles.diaryEmpty}>読み込み中...</p>;
   }
 
+  // 達成率ダッシュボード用の集計
+  const totalGenerated: number = items.reduce((sum, t) => sum + t.generatedCount, 0);
+  const totalCompleted: number = items.reduce((sum, t) => sum + t.completedCount, 0);
+  const overallRate: number = totalGenerated > 0 ? Math.round((totalCompleted / totalGenerated) * 100) : 0;
+
   return (
     <div className={styles.diaryPanel}>
-      <h2 className={styles.panelTitle}>繰り返しタスク一覧</h2>
+      {/* タブ切替 */}
+      <div className={styles.diaryModeBar} style={{ marginBottom: 12 }}>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${recurringView === 'rules' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setRecurringView('rules')}
+        >
+          ルール一覧
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${recurringView === 'stats' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setRecurringView('stats')}
+        >
+          達成率ダッシュボード
+        </button>
+      </div>
+
       {message && (
         <p style={{ color: '#22c55e', fontSize: '13px', marginBottom: 8 }}>{message}</p>
       )}
@@ -172,6 +195,75 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
         </div>
       )}
 
+      {/* 達成率ダッシュボード */}
+      {recurringView === 'stats' && (
+        <div>
+          {/* 全体サマリー */}
+          <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>全体達成率</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6' }}>{overallRate}%</span>
+            </div>
+            <div style={{ width: '100%', height: 8, background: 'var(--input-border)', borderRadius: 4 }}>
+              <div style={{ width: `${overallRate}%`, height: '100%', background: '#3b82f6', borderRadius: 4, transition: 'width 0.5s ease' }} />
+            </div>
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-around', fontSize: 14 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>生成回数</div>
+                <div style={{ fontWeight: 700, fontSize: 20 }}>{totalGenerated}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>達成回数</div>
+                <div style={{ fontWeight: 700, fontSize: 20, color: '#22c55e' }}>{totalCompleted}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ color: 'var(--muted)', fontSize: 12 }}>ルール数</div>
+                <div style={{ fontWeight: 700, fontSize: 20 }}>{items.length}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* ルール別達成率 */}
+          {items.length === 0 ? (
+            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>繰り返しルールがありません</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {items
+                .sort((a, b) => {
+                  const rateA: number = a.generatedCount > 0 ? a.completedCount / a.generatedCount : 0;
+                  const rateB: number = b.generatedCount > 0 ? b.completedCount / b.generatedCount : 0;
+                  return rateB - rateA;
+                })
+                .map((t) => {
+                  const rate: number = t.generatedCount > 0 ? Math.round((t.completedCount / t.generatedCount) * 100) : 0;
+                  return (
+                    <div key={t.id} style={{ padding: '12px 16px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <span style={{ fontWeight: 600 }}>{t.title}</span>
+                        <span style={{ fontSize: 18, fontWeight: 700, color: rate >= 80 ? '#22c55e' : rate >= 50 ? '#f59e0b' : '#ef4444' }}>{rate}%</span>
+                      </div>
+                      <div style={{ width: '100%', height: 6, background: 'var(--input-border)', borderRadius: 3, marginBottom: 6 }}>
+                        <div style={{
+                          width: `${rate}%`, height: '100%', borderRadius: 3, transition: 'width 0.5s ease',
+                          background: rate >= 80 ? '#22c55e' : rate >= 50 ? '#f59e0b' : '#ef4444',
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, fontSize: 12, color: 'var(--muted)' }}>
+                        <span>🔁 {recurrenceLabel(t.recurrence)}</span>
+                        <span>生成: {t.generatedCount}回</span>
+                        <span>達成: {t.completedCount}回</span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ルール一覧 */}
+      {recurringView === 'rules' && (
+      <>
       {items.length === 0 ? (
         <p className={styles.diaryEmpty}>繰り返し設定されたタスクはありません</p>
       ) : (
@@ -249,6 +341,8 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
