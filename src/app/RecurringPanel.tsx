@@ -427,26 +427,55 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
                 <div style={{ marginTop: 8 }}>
                   {categories.length > 0 && (
                     <div style={{ marginBottom: 8 }}>
-                      <label style={{ fontSize: 12, color: 'var(--muted)' }}>カテゴリ</label>
-                      <select
-                        value={t.category || ''}
-                        onChange={async (e) => {
-                          const newCat: string = e.target.value;
-                          await fetch('/api/todos/recurring', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: t.id, updates: { category: newCat } }),
-                          });
-                          setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: newCat } : r));
-                        }}
-                        className={styles.input}
-                        style={{ fontSize: 13 }}
-                      >
-                        <option value="">なし</option>
-                        {categories.map((cat) => (
-                          <option key={cat} value={cat}>{cat}</option>
-                        ))}
-                      </select>
+                      <label style={{ fontSize: 12, color: 'var(--muted)', display: 'block', marginBottom: 4 }}>カテゴリ</label>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            await fetch('/api/todos/recurring', {
+                              method: 'PUT',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ id: t.id, updates: { category: '' } }),
+                            });
+                            setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: '' } : r));
+                          }}
+                          style={{
+                            padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
+                            border: !t.category ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                            background: !t.category ? '#dbeafe' : 'var(--card-bg)',
+                            color: !t.category ? '#1d4ed8' : 'var(--foreground)',
+                            fontWeight: !t.category ? 600 : 400,
+                          }}
+                        >
+                          なし
+                        </button>
+                        {categories.map((cat: string) => {
+                          const isActive: boolean = t.category === cat;
+                          return (
+                            <button
+                              key={cat}
+                              type="button"
+                              onClick={async () => {
+                                await fetch('/api/todos/recurring', {
+                                  method: 'PUT',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ id: t.id, updates: { category: cat } }),
+                                });
+                                setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: cat } : r));
+                              }}
+                              style={{
+                                padding: '4px 12px', borderRadius: 999, fontSize: 13, cursor: 'pointer',
+                                border: isActive ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                                background: isActive ? '#dbeafe' : 'var(--card-bg)',
+                                color: isActive ? '#1d4ed8' : 'var(--foreground)',
+                                fontWeight: isActive ? 600 : 400,
+                              }}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                   <RecurrenceSelector
