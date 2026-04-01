@@ -47,6 +47,10 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const isMobile: boolean = useIsMobile();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
   const [categoryData, setCategoryData] = useState<{ category: string; totalMin: number }[]>([]);
+  const [dailyCategoryData, setDailyCategoryData] = useState<{ date: string; total: number; byCategory: Record<string, number> }[]>([]);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
+  const [visibleCategories, setVisibleCategories] = useState<Set<string>>(new Set());
+  const [chartMode, setChartMode] = useState<'line' | 'bar'>('line');
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [paretoData, setParetoData] = useState<ParetoItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -93,6 +97,35 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
           .filter((d) => d.totalMin > 0)
           .sort((a, b) => b.totalMin - a.totalMin);
         setCategoryData(catData);
+        setAllCategories(catData.map((d) => d.category));
+
+        // 日別×カテゴリの集計
+        const dailyMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        for (const t of [...todos, ...archived]) {
+          if (!t.actualMin || t.actualMin <= 0) {
+            continue;
+          }
+          const ts: number = t.lastWorkedAt ?? t.archivedAt ?? t.createdAt ?? 0;
+          if (!ts) {
+            continue;
+          }
+          const d: Date = new Date(ts);
+          const dateKey: string = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+          const cat: string = t.category || '未分類';
+          let entry = dailyMap.get(dateKey);
+          if (!entry) {
+            entry = { total: 0, byCategory: {} };
+            dailyMap.set(dateKey, entry);
+          }
+          entry.total += t.actualMin;
+          entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + t.actualMin;
+        }
+        const dailyCat: { date: string; total: number; byCategory: Record<string, number> }[] =
+          [...dailyMap.entries()]
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([date, data]) => ({ date, ...data }));
+        setDailyCategoryData(dailyCat);
       } catch { /* ignore */ }
     } catch (e) {
       console.warn('Failed to fetch activity', e);
@@ -525,41 +558,109 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
       )}
 
       {/* グラフモード */}
-      {!loading && viewMode === 'chart' && (
-        <>
-          {categoryData.length === 0 && (
-            <p className={styles.diaryEmpty}>カテゴリ別のデータがありません</p>
-          )}
-          {categoryData.length > 0 && (() => {
-            const COLORS: string[] = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#6b7280'];
-            const maxMin: number = Math.max(...categoryData.map((d) => d.totalMin), 1);
-            const totalMin: number = categoryData.reduce((sum, d) => sum + d.totalMin, 0);
-            return (
-              <div>
-                <div style={{ marginBottom: 12, padding: 12, background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--card-border)', textAlign: 'center' }}>
-                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>合計作業時間</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalMin)}</div>
+      {!loading && viewMode === 'chart' && (() => {
+        const COLORS: string[] = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#6b7280'];
+        const colorMap: Record<string, string> = {};
+        allCategories.forEach((cat, i) => { colorMap[cat] = COLORS[i % COLORS.length]; });
+        const totalMin: number = categoryData.reduce((sum, d) => sum + d.totalMin, 0);
+
+        return (
+          <div>
+            {/* モード切替 + 合計 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button type="button" onClick={() => setChartMode('line')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: chartMode === 'line' ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: chartMode === 'line' ? '#dbeafe' : 'var(--card-bg)', fontWeight: chartMode === 'line' ? 600 : 400 }}>折れ線</button>
+                <button type="button" onClick={() => setChartMode('bar')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: chartMode === 'bar' ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: chartMode === 'bar' ? '#dbeafe' : 'var(--card-bg)', fontWeight: chartMode === 'bar' ? 600 : 400 }}>棒グラフ</button>
+              </div>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>合計 {minutesToText(totalMin)}</span>
+            </div>
+
+            {/* カテゴリフィルターボタン */}
+            <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
+              <button type="button" onClick={() => setVisibleCategories(new Set())} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, cursor: 'pointer', border: visibleCategories.size === 0 ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: visibleCategories.size === 0 ? '#dbeafe' : 'var(--card-bg)', fontWeight: visibleCategories.size === 0 ? 600 : 400 }}>合計のみ</button>
+              {allCategories.map((cat) => {
+                const active: boolean = visibleCategories.has(cat);
+                return (
+                  <button key={cat} type="button" onClick={() => { setVisibleCategories((prev) => { const next = new Set(prev); if (next.has(cat)) { next.delete(cat); } else { next.add(cat); } return next; }); }} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, cursor: 'pointer', border: active ? `2px solid ${colorMap[cat]}` : '1px solid var(--card-border)', background: active ? colorMap[cat] + '22' : 'var(--card-bg)', color: active ? colorMap[cat] : 'var(--foreground)', fontWeight: active ? 600 : 400 }}>{cat}</button>
+                );
+              })}
+            </div>
+
+            {/* 折れ線グラフ */}
+            {chartMode === 'line' && dailyCategoryData.length > 0 && (() => {
+              const data = dailyCategoryData.slice(-30); // 直近30日
+              const maxVal: number = Math.max(...data.map((d) => {
+                let max: number = d.total;
+                for (const cat of visibleCategories) { max = Math.max(max, d.byCategory[cat] ?? 0); }
+                return max;
+              }), 1);
+              const svgW: number = 800;
+              const svgH: number = 300;
+              const padL: number = 50;
+              const padR: number = 10;
+              const padT: number = 20;
+              const padB: number = 40;
+              const chartW: number = svgW - padL - padR;
+              const chartH: number = svgH - padT - padB;
+
+              function toX(i: number): number { return padL + (data.length > 1 ? (i / (data.length - 1)) * chartW : chartW / 2); }
+              function toY(v: number): number { return padT + chartH - (v / maxVal) * chartH; }
+
+              function makePath(values: number[]): string {
+                return values.map((v, i) => `${i === 0 ? 'M' : 'L'}${toX(i)},${toY(v)}`).join(' ');
+              }
+
+              return (
+                <div style={{ overflowX: 'auto' }}>
+                  <svg viewBox={`0 0 ${svgW} ${svgH}`} style={{ width: '100%', maxWidth: svgW, height: 'auto' }}>
+                    {/* グリッド */}
+                    {[0, 1, 2, 3, 4].map((i) => {
+                      const y: number = toY((maxVal / 4) * i);
+                      return <g key={i}><line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e5e7eb" /><text x={padL - 5} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280">{Math.round((maxVal / 4) * i)}分</text></g>;
+                    })}
+                    {/* 合計ライン */}
+                    <path d={makePath(data.map((d) => d.total))} fill="none" stroke="#3b82f6" strokeWidth="2" />
+                    {/* カテゴリライン */}
+                    {allCategories.filter((cat) => visibleCategories.has(cat)).map((cat) => (
+                      <path key={cat} d={makePath(data.map((d) => d.byCategory[cat] ?? 0))} fill="none" stroke={colorMap[cat]} strokeWidth="2" strokeDasharray="4 2" />
+                    ))}
+                    {/* X軸ラベル */}
+                    {data.map((d, i) => {
+                      if (data.length > 15 && i % Math.ceil(data.length / 10) !== 0) { return null; }
+                      return <text key={d.date} x={toX(i)} y={svgH - 10} textAnchor="middle" fontSize="9" fill="#6b7280">{d.date.slice(5)}</text>;
+                    })}
+                  </svg>
                 </div>
+              );
+            })()}
+
+            {/* 棒グラフ */}
+            {chartMode === 'bar' && categoryData.length > 0 && (() => {
+              const maxMin: number = Math.max(...categoryData.map((d) => d.totalMin), 1);
+              return (
                 <div style={{ display: 'grid', gap: 8 }}>
                   {categoryData.map((d, i) => {
                     const barWidth: number = (d.totalMin / maxMin) * 100;
-                    const color: string = COLORS[i % COLORS.length];
                     return (
                       <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ width: 70, fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0 }}>{d.category}</span>
                         <div style={{ flex: 1, height: 24, background: 'var(--input-border)', borderRadius: 4, overflow: 'hidden' }}>
-                          <div style={{ width: `${barWidth}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.5s ease' }} />
+                          <div style={{ width: `${barWidth}%`, height: '100%', background: colorMap[d.category] ?? COLORS[i % COLORS.length], borderRadius: 4, transition: 'width 0.5s ease' }} />
                         </div>
                         <span style={{ width: 70, fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>{minutesToText(d.totalMin)}</span>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            );
-          })()}
-        </>
-      )}
+              );
+            })()}
+
+            {dailyCategoryData.length === 0 && categoryData.length === 0 && (
+              <p className={styles.diaryEmpty}>データがありません</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* パレート分析モード */}
       {!loading && viewMode === 'pareto' && (
