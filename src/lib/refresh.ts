@@ -199,8 +199,10 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     if (!shouldAddToday(rule.recurrence)) {
       continue;
     }
-    // 同名タスクが未完了で存在する場合はスキップ
+    // 同名タスクが未完了で存在する場合はタスク生成をスキップ
+    // ただし「本来やるべきだった回数」としてgenerated_countは加算する
     if (existingTitles.has(rule.title)) {
+      await db.run('UPDATE recurring_rules SET generated_count = generated_count + 1 WHERE id = ?', rule.id);
       continue;
     }
     const newId: string = crypto.randomUUID();
