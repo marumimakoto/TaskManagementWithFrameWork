@@ -84,7 +84,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [editRecurrence, setEditRecurrence] = useState<string>('daily');
   const [message, setMessage] = useState<string>('');
   const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
-  const [recurringView, setRecurringView] = useState<'rules' | 'stats'>('rules');
+  const [recurringView, setRecurringView] = useState<'rules' | 'stats' | 'time'>('rules');
   const [totalActualByTitle, setTotalActualByTitle] = useState<Record<string, number>>({});
   const [calendarFlags, setCalendarFlags] = useState<Record<string, boolean>>(() => {
     try {
@@ -226,7 +226,14 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
           className={`${styles.diaryModeBtn} ${recurringView === 'stats' ? styles.diaryModeBtnActive : ''}`}
           onClick={() => setRecurringView('stats')}
         >
-          達成率ダッシュボード
+          達成率
+        </button>
+        <button
+          type="button"
+          className={`${styles.diaryModeBtn} ${recurringView === 'time' ? styles.diaryModeBtnActive : ''}`}
+          onClick={() => setRecurringView('time')}
+        >
+          累計時間
         </button>
       </div>
 
@@ -308,6 +315,50 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                         <span>生成: {t.generatedCount}回</span>
                         <span>達成: {t.completedCount}回</span>
                         <span>累計: {minutesToText(totalActualByTitle[t.title] ?? 0)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 累計時間モード */}
+      {recurringView === 'time' && (
+        <div>
+          {/* 全体の累計時間 */}
+          <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600 }}>累計作業時間</span>
+              <span style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6' }}>
+                {minutesToText(Object.values(totalActualByTitle).reduce((s, v) => s + v, 0))}
+              </span>
+            </div>
+          </div>
+
+          {/* ルール別の累計時間（降順） */}
+          {items.length === 0 ? (
+            <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>繰り返しルールがありません</p>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {items
+                .map((t) => ({ ...t, totalMin: totalActualByTitle[t.title] ?? 0 }))
+                .sort((a, b) => b.totalMin - a.totalMin)
+                .map((t) => {
+                  const maxMin: number = Math.max(...items.map((i) => totalActualByTitle[i.title] ?? 0), 1);
+                  const barWidth: number = maxMin > 0 ? (t.totalMin / maxMin) * 100 : 0;
+                  return (
+                    <div key={t.id} style={{ padding: '10px 14px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontWeight: 600 }}>{t.title}</span>
+                        <span style={{ fontSize: 16, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(t.totalMin)}</span>
+                      </div>
+                      <div style={{ width: '100%', height: 6, background: 'var(--input-border)', borderRadius: 3 }}>
+                        <div style={{ width: `${barWidth}%`, height: '100%', background: '#3b82f6', borderRadius: 3, transition: 'width 0.5s ease' }} />
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+                        🔁 {recurrenceLabel(t.recurrence)}
                       </div>
                     </div>
                   );

@@ -72,21 +72,24 @@ export default function SettingsPanel({
 
           {/* フォントサイズ */}
           <div>
-            <label className={styles.fieldLabel}>
-              フォントサイズ: {localSettings.fontSize}px
-            </label>
-            <input
-              type="range"
-              min={12}
-              max={24}
-              step={1}
-              value={localSettings.fontSize}
-              onChange={(e) => updateSetting({ fontSize: parseInt(e.target.value, 10) })}
-              className={styles.rangeInput}
-            />
-            <div className={styles.settingsRangeLabels}>
-              <span>12px</span>
-              <span>24px</span>
+            <label className={styles.fieldLabel}>文字の大きさ</label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+              {[{ label: '小', value: 14 }, { label: '中', value: 16 }, { label: '大', value: 19 }].map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => updateSetting({ fontSize: opt.value })}
+                  style={{
+                    flex: 1, padding: '8px 0', borderRadius: 8, cursor: 'pointer', fontWeight: 600,
+                    border: localSettings.fontSize === opt.value ? '2px solid #3b82f6' : '1px solid var(--card-border)',
+                    background: localSettings.fontSize === opt.value ? '#dbeafe' : 'var(--card-bg)',
+                    color: localSettings.fontSize === opt.value ? '#1d4ed8' : 'var(--foreground)',
+                    fontSize: opt.value + 'px',
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
             </div>
           </div>
 
@@ -128,6 +131,18 @@ export default function SettingsPanel({
       <section className={styles.myPageSection}>
         <h2 className={styles.myPageHeading}>執事キャラクター</h2>
         <div className={styles.myPageForm}>
+
+          {/* 表示ON/OFF */}
+          <div style={{ marginBottom: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={localSettings.showButler !== false}
+                onChange={(e) => updateSetting({ showButler: e.target.checked })}
+              />
+              執事を表示する
+            </label>
+          </div>
 
           {/* アイコン */}
           <div className={styles.avatarSection}>
@@ -244,21 +259,6 @@ export default function SettingsPanel({
             />
             <span style={{ minWidth: 40, textAlign: 'right', fontWeight: 600 }}>{localSettings.pomodoroBreak ?? 5}分</span>
           </div>
-        </div>
-      </section>
-
-      {/* 執事アバター */}
-      <section className={styles.settingsSection}>
-        <h3 className={styles.settingsSectionTitle}>執事アバター</h3>
-        <div className={styles.settingsRow}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-            <input
-              type="checkbox"
-              checked={localSettings.showButler !== false}
-              onChange={(e) => updateSetting({ showButler: e.target.checked })}
-            />
-            執事を表示する
-          </label>
         </div>
       </section>
 
