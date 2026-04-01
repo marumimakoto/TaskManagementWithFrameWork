@@ -357,7 +357,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
           </div>
         </div>
         <div className={styles.activityTypeFilterRow}>
-          {(['work_log', 'created', 'completed', 'deleted'] as const).map((type) => {
+          {(['work_log', 'completed'] as const).map((type) => {
             const config = TYPE_CONFIG[type];
             const isActive: boolean = typeFilter.has(type);
             return (
