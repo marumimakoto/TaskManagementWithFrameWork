@@ -1246,6 +1246,12 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
     });
+    // 作業ログにも記録
+    fetch('/api/todos/' + id + '/logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: `+${addMin}分 作業`, date: dateStr || undefined }),
+    });
   }
 
   /**
