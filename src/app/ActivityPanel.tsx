@@ -76,10 +76,14 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         url += '&to=' + to;
       }
       const res: Response = await fetch(url);
-      const data: { entries: ActivityEntry[]; dailyStats: DailyStat[]; paretoData: ParetoItem[] } = await res.json();
+      const data: { entries: ActivityEntry[]; dailyStats: DailyStat[]; paretoData: ParetoItem[]; dailyCategoryStats?: { date: string; total: number; byCategory: Record<string, number> }[] } = await res.json();
       setEntries(data.entries ?? []);
       setDailyStats(data.dailyStats ?? []);
       setParetoData(data.paretoData ?? []);
+      // APIからwork_logsベースの日別カテゴリデータを受け取る
+      if (data.dailyCategoryStats && data.dailyCategoryStats.length > 0) {
+        setDailyCategoryData(data.dailyCategoryStats);
+      }
 
       // カテゴリ別実績を集計（todosとアーカイブから）
       try {
@@ -116,37 +120,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         }
         setAllCategories([...catSet]);
 
-        // 日別×カテゴリの集計
-        const dailyMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
-        const pad = (n: number): string => String(n).padStart(2, '0');
-        const allTasks: Record<string, unknown>[] = [...todos, ...archived];
-        console.log('[activity-debug] allTasks:', allTasks.length, 'todos:', todos.length, 'archived:', archived.length,
-          'sample:', allTasks.slice(0, 3).map((t) => ({ title: t.title, actualMin: t.actualMin, lastWorkedAt: t.lastWorkedAt, createdAt: t.createdAt })));
-        for (const t of allTasks) {
-          const actualMin: number = (t.actualMin as number) ?? 0;
-          if (actualMin <= 0) {
-            continue;
-          }
-          const ts: number = (t.lastWorkedAt as number) ?? (t.archivedAt as number) ?? (t.createdAt as number) ?? Date.now();
-          if (!ts) {
-            continue;
-          }
-          const d: Date = new Date(ts);
-          const dateKey: string = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-          const cat: string = (t.category as string) || '未分類';
-          let entry = dailyMap.get(dateKey);
-          if (!entry) {
-            entry = { total: 0, byCategory: {} };
-            dailyMap.set(dateKey, entry);
-          }
-          entry.total += actualMin;
-          entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + actualMin;
-        }
-        const dailyCat: { date: string; total: number; byCategory: Record<string, number> }[] =
-          [...dailyMap.entries()]
-            .sort((a, b) => a[0].localeCompare(b[0]))
-            .map(([date, data]) => ({ date, ...data }));
-        setDailyCategoryData(dailyCat);
+        // 日別×カテゴリの集計はAPIのdailyCategoryStats（work_logsベース）を使用
       } catch (catErr) { console.warn('[activity] category fetch failed:', catErr); }
     } catch (e) {
       console.warn('Failed to fetch activity', e);

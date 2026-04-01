@@ -226,37 +226,40 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // 日別の作業時間合計
-  // todosとarchived_todosの両方から、last_worked_atの日ごとにactual_minを集計
+  // 日別の作業時間合計（work_logsベース — リフレッシュの影響を受けない）
+  // work_logsのcontentから分数を抽出して日別に集計
   {
-    const allTasks: { last_worked_at: number; actual_min: number }[] = [];
-    // 現在のタスク
-    let q1: string = 'SELECT last_worked_at, actual_min FROM todos WHERE user_id = ? AND last_worked_at IS NOT NULL AND actual_min > 0';
-    const p1: (string | number)[] = [userId];
-    if (range) {
-      q1 += ' AND last_worked_at BETWEEN ? AND ?';
-      p1.push(range.start, range.end);
+    let wlQuery: string = `
+      SELECT w.date, w.content, w.todo_id
+      FROM work_logs w
+      LEFT JOIN todos t ON w.todo_id = t.id
+      LEFT JOIN archived_todos a ON w.todo_id = a.id
+      WHERE (t.user_id = ? OR a.user_id = ?)
+    `;
+    const wlParams: (string | number)[] = [userId, userId];
+    if (from) {
+      wlQuery += ' AND w.date >= ?';
+      wlParams.push(from);
     }
-    const rows1 = await db.all<{ last_worked_at: number; actual_min: number }>(q1, ...p1);
-    allTasks.push(...rows1);
-    // アーカイブ
-    let q2: string = 'SELECT archived_at as last_worked_at, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0';
-    const p2: (string | number)[] = [userId];
-    if (range) {
-      q2 += ' AND archived_at BETWEEN ? AND ?';
-      p2.push(range.start, range.end);
+    if (to) {
+      wlQuery += ' AND w.date <= ?';
+      wlParams.push(to);
     }
-    const rows2 = await db.all<{ last_worked_at: number; actual_min: number }>(q2, ...p2);
-    allTasks.push(...rows2);
+    const wlRows = await db.all<{ date: string; content: string; todo_id: string }>(wlQuery, ...wlParams);
 
-    for (const row of allTasks) {
-      const d: string = tsToDate(row.last_worked_at);
-      let stat = statsMap.get(d);
+    for (const row of wlRows) {
+      // contentから分数を抽出（例: "+25分 作業しました" → 25）
+      const minMatch: RegExpMatchArray | null = row.content.match(/\+?(\d+)分/);
+      const minutes: number = minMatch ? parseInt(minMatch[1], 10) : 0;
+      if (minutes <= 0) {
+        continue;
+      }
+      let stat = statsMap.get(row.date);
       if (!stat) {
         stat = { workLogs: 0, created: 0, completed: 0, deleted: 0, workedMin: 0 };
-        statsMap.set(d, stat);
+        statsMap.set(row.date, stat);
       }
-      stat.workedMin += row.actual_min;
+      stat.workedMin += minutes;
     }
   }
 
@@ -293,5 +296,50 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     .map(([title, actualMin]) => ({ title, actualMin }))
     .sort((a, b) => b.actualMin - a.actualMin);
 
-  return NextResponse.json({ entries, dailyStats, paretoData });
+  // 日別×カテゴリの作業時間（work_logsベース — 折れ線グラフ用）
+  const dailyCategoryStats: { date: string; total: number; byCategory: Record<string, number> }[] = [];
+  try {
+    let dcQuery: string = `
+      SELECT w.date, w.content, w.todo_id
+      FROM work_logs w
+      LEFT JOIN todos t ON w.todo_id = t.id
+      LEFT JOIN archived_todos a ON w.todo_id = a.id
+      WHERE (t.user_id = ? OR a.user_id = ?)
+    `;
+    const dcParams: (string | number)[] = [userId, userId];
+    if (from) {
+      dcQuery += ' AND w.date >= ?';
+      dcParams.push(from);
+    }
+    if (to) {
+      dcQuery += ' AND w.date <= ?';
+      dcParams.push(to);
+    }
+    const dcRows = await db.all<{ date: string; content: string; todo_id: string }>(dcQuery, ...dcParams);
+
+    const dcMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
+    for (const row of dcRows) {
+      const minMatch: RegExpMatchArray | null = row.content.match(/\+?(\d+)分/);
+      const minutes: number = minMatch ? parseInt(minMatch[1], 10) : 0;
+      if (minutes <= 0) {
+        continue;
+      }
+      const cat: string = catMap.get(row.todo_id) || '未分類';
+      let entry = dcMap.get(row.date);
+      if (!entry) {
+        entry = { total: 0, byCategory: {} };
+        dcMap.set(row.date, entry);
+      }
+      entry.total += minutes;
+      entry.byCategory[cat] = (entry.byCategory[cat] ?? 0) + minutes;
+    }
+    const dcSorted: string[] = [...dcMap.keys()].sort();
+    for (const d of dcSorted) {
+      dailyCategoryStats.push({ date: d, ...dcMap.get(d)! });
+    }
+  } catch (e) {
+    console.warn('[activity] dailyCategoryStats failed:', e);
+  }
+
+  return NextResponse.json({ entries, dailyStats, paretoData, dailyCategoryStats });
 }
