@@ -188,7 +188,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           content: 'タスクを完了しました',
           date: tsToDate(row.archived_at),
           timestamp: row.archived_at,
-          category: '未分類',
+          category: catMap.get(row.id) || '未分類',
         });
       }
     }
@@ -215,7 +215,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを削除しました',
         date: tsToDate(row.archived_at),
         timestamp: row.archived_at,
-        category: '未分類',
+        category: catMap.get(row.id) || '未分類',
       });
     }
   }
