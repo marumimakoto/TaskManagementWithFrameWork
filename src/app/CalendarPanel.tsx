@@ -84,7 +84,15 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
   const [currentYear, setCurrentYear] = useState<number>(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(now.getMonth());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
-  const [showRecurring, setShowRecurring] = useState<boolean>(true);
+  const [showRecurring, setShowRecurring] = useState<boolean>(() => {
+    try {
+      const saved: string | null = localStorage.getItem('kiroku:calendar-show-recurring');
+      if (saved !== null) {
+        return saved === 'true';
+      }
+    } catch { /* ignore */ }
+    return false;
+  });
 
   /** 日付キー → その日が期限のTodo配列のマップ */
   const todosByDate: Map<string, Todo[]> = useMemo(() => {
@@ -311,7 +319,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
             <input
               type="checkbox"
               checked={showRecurring}
-              onChange={(e) => setShowRecurring(e.target.checked)}
+              onChange={(e) => { setShowRecurring(e.target.checked); try { localStorage.setItem('kiroku:calendar-show-recurring', String(e.target.checked)); } catch { /* ignore */ } }}
             />
             繰り返しタスクを表示
           </label>
