@@ -46,6 +46,7 @@ const TYPE_CONFIG: Record<string, { label: string; color: string }> = {
 export default function ActivityPanel({ user, isPro, onShowProModal }: { user: AppUser; isPro?: boolean; onShowProModal?: () => void }): React.ReactElement {
   const isMobile: boolean = useIsMobile();
   const [entries, setEntries] = useState<ActivityEntry[]>([]);
+  const [categoryData, setCategoryData] = useState<{ category: string; totalMin: number }[]>([]);
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [paretoData, setParetoData] = useState<ParetoItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -73,6 +74,26 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
       setEntries(data.entries ?? []);
       setDailyStats(data.dailyStats ?? []);
       setParetoData(data.paretoData ?? []);
+
+      // カテゴリ別実績を集計（todosとアーカイブから）
+      try {
+        const [todosRes, archiveRes] = await Promise.all([
+          fetch('/api/todos?userId=' + user.id),
+          fetch('/api/todos/archive?userId=' + user.id),
+        ]);
+        const todos = await todosRes.json();
+        const archived = await archiveRes.json();
+        const catMap: Map<string, number> = new Map();
+        for (const t of [...todos, ...archived]) {
+          const cat: string = t.category || '未分類';
+          catMap.set(cat, (catMap.get(cat) ?? 0) + (t.actualMin ?? 0));
+        }
+        const catData: { category: string; totalMin: number }[] = [...catMap.entries()]
+          .map(([category, totalMin]) => ({ category, totalMin }))
+          .filter((d) => d.totalMin > 0)
+          .sort((a, b) => b.totalMin - a.totalMin);
+        setCategoryData(catData);
+      } catch { /* ignore */ }
     } catch (e) {
       console.warn('Failed to fetch activity', e);
     } finally {
@@ -358,7 +379,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             </button>
           </div>
         </div>
-        <div className={styles.activityTypeFilterRow}>
+        {viewMode !== 'chart' && <div className={styles.activityTypeFilterRow}>
           {(['work_log', 'completed'] as const).map((type) => {
             const config = TYPE_CONFIG[type];
             const isActive: boolean = typeFilter.has(type);
@@ -378,7 +399,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
               </button>
             );
           })}
-        </div>
+        </div>}
       </section>
 
       {/* エクスポートボタン（PC版のみ） */}
@@ -506,17 +527,37 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
       {/* グラフモード */}
       {!loading && viewMode === 'chart' && (
         <>
-          {chartData.length === 0 && (
-            <p className={styles.diaryEmpty}>グラフデータがありません</p>
+          {categoryData.length === 0 && (
+            <p className={styles.diaryEmpty}>カテゴリ別のデータがありません</p>
           )}
-          {chartData.length > 0 && (
-            <section className={styles.activityChartSection}>
-              <canvas
-                ref={chartCanvasRef}
-                className={styles.activityChart}
-              />
-            </section>
-          )}
+          {categoryData.length > 0 && (() => {
+            const COLORS: string[] = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#a855f7', '#06b6d4', '#ec4899', '#6b7280'];
+            const maxMin: number = Math.max(...categoryData.map((d) => d.totalMin), 1);
+            const totalMin: number = categoryData.reduce((sum, d) => sum + d.totalMin, 0);
+            return (
+              <div>
+                <div style={{ marginBottom: 12, padding: 12, background: 'var(--card-bg)', borderRadius: 10, border: '1px solid var(--card-border)', textAlign: 'center' }}>
+                  <div style={{ fontSize: 12, color: 'var(--muted)' }}>合計作業時間</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalMin)}</div>
+                </div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {categoryData.map((d, i) => {
+                    const barWidth: number = (d.totalMin / maxMin) * 100;
+                    const color: string = COLORS[i % COLORS.length];
+                    return (
+                      <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <span style={{ width: 70, fontSize: 13, fontWeight: 600, textAlign: 'right', flexShrink: 0 }}>{d.category}</span>
+                        <div style={{ flex: 1, height: 24, background: 'var(--input-border)', borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ width: `${barWidth}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.5s ease' }} />
+                        </div>
+                        <span style={{ width: 70, fontSize: 12, color: 'var(--muted)', flexShrink: 0 }}>{minutesToText(d.totalMin)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
         </>
       )}
 
