@@ -2679,20 +2679,33 @@
     gap: 6px;
   }
 
-  /* タスクカード: 1行レイアウト（詳細は展開時のみ） */
+  /* タスクカード: 2行レイアウト */
+  /* 1行目: チェック+タイトル */
+  /* 2行目: 予定実績+期限+バッジ+入力+ボタン（全て横並び） */
   .card {
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
-    gap: 4px;
-    padding: 5px 6px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    gap: 2px 6px;
+    padding: 4px 6px;
     font-size: 13px;
     max-width: 100%;
     overflow: hidden;
   }
 
+  /* チェックボックスは1行目左 */
+  .card > input[type="checkbox"] {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: center;
+  }
+
+  /* タイトル部分は1行目右 */
   .cardLeft {
-    flex-direction: row;
-    gap: 4px;
-    align-items: baseline;
+    grid-row: 1;
+    grid-column: 2;
+    flex-direction: column;
+    gap: 0;
     min-width: 0;
   }
 
@@ -2705,10 +2718,16 @@
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
-    padding: 1px 4px !important;
+    padding: 0 !important;
   }
 
-  /* スマホ: 詳細は展開時のみ */
+  /* 予定/実績はcardLeftの中ではなく2行目に移動 */
+  .taskProgress {
+    font-size: 11px !important;
+    padding: 0 !important;
+  }
+
+  /* 詳細は展開時のみ */
   .taskDetail {
     display: none !important;
   }
@@ -2719,13 +2738,24 @@
     white-space: normal;
   }
 
-  .taskProgress {
-    font-size: 12px !important;
-    padding: 0 4px !important;
+  /* 期限・バッジ・ボタン等は2行目に横並び */
+  .card > .actions,
+  .card > .taskDeadlineBig,
+  .card > span[class*="badge"] {
+    grid-row: 2;
+  }
+
+  /* actionsを2行目全幅に */
+  .actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    gap: 4px;
+    width: 100%;
+    flex-wrap: nowrap;
   }
 
   .card {
-    padding: 5px 6px !important;
+    padding: 4px 6px !important;
     gap: 4px !important;
   }
 
@@ -3129,10 +3159,11 @@
   }
 
   .card {
-    padding: 5px 6px;
+    padding: 4px 6px;
     font-size: 13px;
-    gap: 4px;
-    grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+    gap: 2px 6px;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
   }
 
   .cardTitle {
