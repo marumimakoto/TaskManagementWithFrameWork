@@ -114,11 +114,15 @@ export default function TodayPanel({
               )}
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-              予定 {minutesToText(t.estMin)} / 実績 {minutesToText(t.actualMin)}
-              {t.deadline && <span style={{ marginLeft: 8 }}>期限: {formatDeadline(t.deadline)}</span>}
+              📋{minutesToText(t.estMin)} / ⏱{minutesToText(t.actualMin)}
             </div>
           </div>
-          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: 2 }}>
+            {t.deadline && (
+              <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}>⏰ {formatDeadline(t.deadline)}</span>
+            )}
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
+          </div>
         </div>
 
         {/* 展開時: renderExpandedがあればホーム画面と同じ、なければ簡易表示 */}

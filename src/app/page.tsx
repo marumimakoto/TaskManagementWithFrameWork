@@ -3202,14 +3202,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       分
                     </span>
                   ) : (
-                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'est'); }} title="ダブルクリックで予定を編集">
-                      予定 {minutesToText(t.estMin)}
+                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'est'); }} title="ダブルクリックで予定を編集" style={{ color: '#6b7280' }}>
+                      📋{minutesToText(t.estMin)}
                     </span>
                   )}
                   {' / '}
                   {isEditingThis && editingField === 'actual' ? (
                     <span>
-                      実績{' '}
+                      ⏱{' '}
                       <input
                         type="number"
                         value={editValue}
@@ -3230,8 +3230,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       分
                     </span>
                   ) : (
-                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'actual'); }} title="ダブルクリックで実績を編集">
-                      実績 {minutesToText(t.actualMin)}
+                    <span onDoubleClick={(e) => { e.stopPropagation(); startFieldEdit(t, 'actual'); }} title="ダブルクリックで実績を編集" style={{ color: '#22c55e' }}>
+                      ⏱{minutesToText(t.actualMin)}
                     </span>
                   )}
                 </div>
@@ -3279,11 +3279,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               {/* Right: actions */}
               <div className={styles.actions}>
                 <div className={styles.actionField}>
-                  <label className={styles.fieldLabel}>実績(分)</label>
                   <input
                     type="number"
                     min="0"
-                    placeholder="分"
+                    placeholder="+分"
                     value={actualInputs[t.id] ?? ''}
                     onChange={(e) =>
                       setActualInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
@@ -3298,8 +3297,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     disabled={t.done}
                   />
                 </div>
-                <button onClick={() => addLog(t.id)} className={styles.iconBtn} disabled={t.done}>
-                  実績
+                <button onClick={() => addLog(t.id)} className={styles.iconBtn} disabled={t.done} title="実績を加算">
+                  +
                 </button>
                 {t.parentId && (
                   <button

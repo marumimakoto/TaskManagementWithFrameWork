@@ -105,14 +105,24 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
     }
 
     // 繰り返しルールから今月・来月の該当日を計算してカレンダーに表示
-    if (showRecurring && recurringRules.length > 0) {
+    // カレンダー表示OFFのルールを除外
+    let calendarFlags: Record<string, boolean> = {};
+    try {
+      const cached: string | null = localStorage.getItem('kiroku:recurring-calendar:' + (userId ?? ''));
+      if (cached) {
+        calendarFlags = JSON.parse(cached);
+      }
+    } catch { /* ignore */ }
+    const filteredRules: RecurringRule[] = recurringRules.filter((r) => calendarFlags[r.id] !== false);
+
+    if (showRecurring && filteredRules.length > 0) {
       const today: Date = new Date();
       today.setHours(0, 0, 0, 0);
       // 今月1日から来月末日まで
       const rangeStart: Date = new Date(currentYear, currentMonth, 1);
       const rangeEnd: Date = new Date(currentYear, currentMonth + 2, 0);
 
-      for (const rule of recurringRules) {
+      for (const rule of filteredRules) {
         const offset: number = rule.deadlineOffsetDays ?? 0;
         const rec: string = rule.recurrence;
         const DAY_NAMES: string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];

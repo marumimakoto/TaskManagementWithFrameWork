@@ -82,6 +82,23 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [message, setMessage] = useState<string>('');
   const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
   const [recurringView, setRecurringView] = useState<'rules' | 'stats'>('rules');
+  const [calendarFlags, setCalendarFlags] = useState<Record<string, boolean>>(() => {
+    try {
+      const cached: string | null = localStorage.getItem('kiroku:recurring-calendar:' + user.id);
+      if (cached) {
+        return JSON.parse(cached) as Record<string, boolean>;
+      }
+    } catch { /* ignore */ }
+    return {};
+  });
+
+  function toggleCalendarFlag(ruleId: string): void {
+    setCalendarFlags((prev) => {
+      const next: Record<string, boolean> = { ...prev, [ruleId]: !(prev[ruleId] !== false) };
+      try { localStorage.setItem('kiroku:recurring-calendar:' + user.id, JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   const fetchItems = useCallback(async (): Promise<void> => {
     try {
@@ -343,6 +360,14 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                   >
                     設定を変更
                   </button>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', fontSize: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={calendarFlags[t.id] !== false}
+                      onChange={() => toggleCalendarFlag(t.id)}
+                    />
+                    📅カレンダー
+                  </label>
                   <button
                     type="button"
                     className={styles.dangerIconBtn}
