@@ -126,6 +126,10 @@ export type UserSettings = {
   welcomeTone: string;
   /** 執事を表示するか */
   showButler: boolean;
+  /** ポモドーロ作業時間（分） */
+  pomodoroWork: number;
+  /** ポモドーロ休憩時間（分） */
+  pomodoroBreak: number;
 };
 
 /** UserSettingsのデフォルト値 */
@@ -138,6 +142,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   butlerMaxChars: 80,
   welcomeTone: 'trivia',
   showButler: true,
+  pomodoroWork: 25,
+  pomodoroBreak: 5,
 };
 
 /**

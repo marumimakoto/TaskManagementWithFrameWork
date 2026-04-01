@@ -95,6 +95,7 @@ export async function PUT(
 
   // 繰り返し設定が変更された場合、recurring_rulesを更新
   if (updates.recurrence !== undefined && oldTodo) {
+    console.log('[recurring-debug]', { newRec: updates.recurrence, oldRec: oldTodo.recurrence, changed: updates.recurrence !== oldTodo.recurrence });
     if (updates.recurrence !== oldTodo.recurrence) {
       // 繰り返し設定が実際に変わった場合のみ、既存ルール（同タイトル）を無効化
       await db.run(

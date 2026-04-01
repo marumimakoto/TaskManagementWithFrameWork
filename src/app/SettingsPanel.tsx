@@ -212,7 +212,42 @@ export default function SettingsPanel({
         </div>
       </section>
 
-      {/* 執事の表示 */}
+      {/* ポモドーロ */}
+      <section className={styles.settingsSection}>
+        <h3 className={styles.settingsSectionTitle}>ポモドーロタイマー</h3>
+        <div className={styles.settingsRow}>
+          <label className={styles.fieldLabel}>作業時間（分）</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="range"
+              min="5"
+              max="60"
+              step="5"
+              value={localSettings.pomodoroWork ?? 25}
+              onChange={(e) => updateSetting({ pomodoroWork: parseInt(e.target.value, 10) })}
+              style={{ flex: 1 }}
+            />
+            <span style={{ minWidth: 40, textAlign: 'right', fontWeight: 600 }}>{localSettings.pomodoroWork ?? 25}分</span>
+          </div>
+        </div>
+        <div className={styles.settingsRow}>
+          <label className={styles.fieldLabel}>休憩時間（分）</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              step="1"
+              value={localSettings.pomodoroBreak ?? 5}
+              onChange={(e) => updateSetting({ pomodoroBreak: parseInt(e.target.value, 10) })}
+              style={{ flex: 1 }}
+            />
+            <span style={{ minWidth: 40, textAlign: 'right', fontWeight: 600 }}>{localSettings.pomodoroBreak ?? 5}分</span>
+          </div>
+        </div>
+      </section>
+
+      {/* 執事アバター */}
       <section className={styles.settingsSection}>
         <h3 className={styles.settingsSectionTitle}>執事アバター</h3>
         <div className={styles.settingsRow}>

@@ -5,24 +5,29 @@ import type { Todo } from './types';
 import { minutesToText } from './utils';
 import styles from './page.module.css';
 
-const WORK_SECONDS: number = 25 * 60;
-const BREAK_SECONDS: number = 5 * 60;
-
 /**
  * ポモドーロタイマー（全画面表示）
  * @param todo - 対象タスク
  * @param onClose - 閉じるコールバック
  * @param onAddMinutes - 実績追加コールバック（分）
+ * @param workMinutes - 作業時間（分）デフォルト25
+ * @param breakMinutes - 休憩時間（分）デフォルト5
  */
 export default function PomodoroTimer({
   todo,
   onClose,
   onAddMinutes,
+  workMinutes = 25,
+  breakMinutes = 5,
 }: {
   todo: Todo;
   onClose: () => void;
   onAddMinutes: (minutes: number) => void;
+  workMinutes?: number;
+  breakMinutes?: number;
 }): React.ReactElement {
+  const WORK_SECONDS: number = workMinutes * 60;
+  const BREAK_SECONDS: number = breakMinutes * 60;
   const [phase, setPhase] = useState<'work' | 'break'>('work');
   const [secondsLeft, setSecondsLeft] = useState<number>(WORK_SECONDS);
   const [running, setRunning] = useState<boolean>(false);

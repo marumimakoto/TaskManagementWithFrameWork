@@ -3659,7 +3659,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'calendar' && (
-        <CalendarPanel todos={todos} />
+        <CalendarPanel todos={todos} userId={user.id} />
       )}
 
       {activeTab === 'category-stats' && (
@@ -3774,6 +3774,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now() } }),
             });
           }}
+          workMinutes={settings.pomodoroWork ?? 25}
+          breakMinutes={settings.pomodoroBreak ?? 5}
         />
       )}
 

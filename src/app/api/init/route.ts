@@ -51,6 +51,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       butlerMaxChars: settingsRow.butler_max_chars ?? 80,
       welcomeTone: settingsRow.welcome_tone ?? 'trivia',
       showButler: settingsRow.show_butler !== 0,
+      pomodoroWork: settingsRow.pomodoro_work ?? 25,
+      pomodoroBreak: settingsRow.pomodoro_break ?? 5,
     } : null;
 
     // 購入状態（管理者チェック含む）

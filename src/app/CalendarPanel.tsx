@@ -1,13 +1,24 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Todo } from './types';
 import { formatDeadline } from './utils';
 import styles from './page.module.css';
 
+/** 繰り返しルールの型 */
+type RecurringRule = {
+  id: string;
+  title: string;
+  recurrence: string;
+  deadlineOffsetDays: number | null;
+  estMin: number;
+};
+
 /** CalendarPanelのprops型 */
 type CalendarPanelProps = {
   todos: Todo[];
+  userId?: string;
+  recurringRules?: RecurringRule[];
 };
 
 /**
@@ -51,7 +62,24 @@ function getTodayKey(): string {
 const WEEKDAY_LABELS: string[] = ['日', '月', '火', '水', '木', '金', '土'];
 
 /** カレンダーページコンポーネント */
-export default function CalendarPanel({ todos }: CalendarPanelProps): React.ReactElement {
+export default function CalendarPanel({ todos, userId, recurringRules: propRules }: CalendarPanelProps): React.ReactElement {
+  const [fetchedRules, setFetchedRules] = useState<RecurringRule[]>([]);
+  const recurringRules: RecurringRule[] = propRules ?? fetchedRules;
+
+  // userIdが渡された場合、繰り返しルールをAPIから取得
+  useEffect(() => {
+    if (!userId || propRules) {
+      return;
+    }
+    fetch('/api/todos/recurring?userId=' + userId)
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setFetchedRules(data);
+        }
+      })
+      .catch(() => {});
+  }, [userId, propRules]);
   const now: Date = new Date();
   const [currentYear, setCurrentYear] = useState<number>(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(now.getMonth());
@@ -60,6 +88,8 @@ export default function CalendarPanel({ todos }: CalendarPanelProps): React.Reac
   /** 日付キー → その日が期限のTodo配列のマップ */
   const todosByDate: Map<string, Todo[]> = useMemo(() => {
     const map: Map<string, Todo[]> = new Map();
+
+    // 既存タスクの期限
     for (const todo of todos) {
       if (todo.deadline === undefined) {
         continue;
@@ -72,8 +102,52 @@ export default function CalendarPanel({ todos }: CalendarPanelProps): React.Reac
         map.set(key, [todo]);
       }
     }
+
+    // 繰り返しルールから1ヶ月先までの将来期限を計算
+    if (recurringRules.length > 0) {
+      const now: Date = new Date();
+      const oneMonthLater: Date = new Date();
+      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+
+      for (const rule of recurringRules) {
+        if (rule.deadlineOffsetDays === null || rule.deadlineOffsetDays === undefined) {
+          continue;
+        }
+        // 既にtodosに同タイトルの未完了タスクがあればスキップ（重複防止）
+        const existingTodo: Todo | undefined = todos.find((t) => t.title === rule.title && !t.done);
+        if (existingTodo && existingTodo.deadline) {
+          continue;
+        }
+        // 今日からoffset日後の期限を計算
+        const futureDate: Date = new Date();
+        futureDate.setDate(futureDate.getDate() + rule.deadlineOffsetDays);
+        if (futureDate > oneMonthLater) {
+          continue;
+        }
+        const futureTodo: Todo = {
+          id: 'recurring-' + rule.id,
+          title: '🔁 ' + rule.title,
+          estMin: rule.estMin,
+          actualMin: 0,
+          stuckHours: 0,
+          recurrence: rule.recurrence,
+          started: false,
+          done: false,
+          sortOrder: 0,
+          deadline: futureDate.getTime(),
+        };
+        const key: string = toDateKey(futureTodo.deadline!);
+        const existing: Todo[] | undefined = map.get(key);
+        if (existing !== undefined) {
+          existing.push(futureTodo);
+        } else {
+          map.set(key, [futureTodo]);
+        }
+      }
+    }
+
     return map;
-  }, [todos]);
+  }, [todos, recurringRules]);
 
   /** 前月に移動する */
   function goToPreviousMonth(): void {
@@ -138,7 +212,7 @@ export default function CalendarPanel({ todos }: CalendarPanelProps): React.Reac
   }
 
   return (
-    <div style={{ padding: '16px', maxWidth: '720px', margin: '0 auto' }}>
+    <div style={{ padding: '8px', maxWidth: '100%', margin: '0 auto' }}>
       {/* ヘッダー: 前月 / 年月表示 / 次月 */}
       <div
         style={{
@@ -219,7 +293,7 @@ export default function CalendarPanel({ todos }: CalendarPanelProps): React.Reac
               <div
                 key={`empty-${index}`}
                 style={{
-                  minHeight: '72px',
+                  minHeight: '100px',
                   borderRight: (index + 1) % 7 !== 0 ? '1px solid var(--card-border, #eee)' : 'none',
                   borderBottom: '1px solid var(--card-border, #eee)',
                   background: 'var(--card-bg, #f9f9f9)',
@@ -245,7 +319,7 @@ export default function CalendarPanel({ todos }: CalendarPanelProps): React.Reac
                 setSelectedDateKey(dateKey);
               }}
               style={{
-                minHeight: '72px',
+                minHeight: '100px',
                 padding: '4px 6px',
                 cursor: 'pointer',
                 borderRight: !isSaturday ? '1px solid var(--card-border, #eee)' : 'none',
