@@ -3456,13 +3456,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   title="ダブルクリックで期限を編集"
                 >
                   ⏰ {formatDeadline(t.deadline)}
-                </div>
-              )}
-
-              {/* 作成日（作成日ソート時のみ表示） */}
-              {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
-                <div className={styles.taskDeadlineBig} style={{ color: 'var(--muted)', fontSize: 12 }}>
-                  作成: {formatDateShort(t.createdAt)}
+                  {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                    <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--muted)' }}>作成: {formatDateShort(t.createdAt)}</span>
+                  )}
                 </div>
               )}
 
