@@ -707,6 +707,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [swipeOffset, setSwipeOffset] = useState<Record<string, number>>({});
   const [swipeAction, setSwipeAction] = useState<Record<string, 'nest' | 'unnest' | null>>({});
 
+  // スマホ用長押しドラッグ
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [touchDragId, setTouchDragId] = useState<string | null>(null);
+  const [touchDragY, setTouchDragY] = useState<number>(0);
+  const [touchDropIndex, setTouchDropIndex] = useState<number | null>(null);
+  const touchDragStartY = useRef<number>(0);
+
   const sorted: Todo[] = useMemo((): Todo[] => {
     // 実際に存在するタスクIDのセット（孤立子タスク判定用）
     const allIds: Set<string> = new Set(todos.map((t) => t.id));
@@ -2835,15 +2842,15 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           const isExpanded: boolean = expandedId === t.id;
           const isDragOverChild: boolean = dragOverId === t.id && dragOverMode === 'child' && dragId !== t.id;
           // カード間ドロップゾーンのハイライト（カードの上の隙間 = idx、下の隙間 = idx+1）
-          const isBetweenActive: boolean = dropBetweenIndex === idx && dragId !== t.id;
-          const isAfterActive: boolean = dropBetweenIndex === (idx + 1) && dragId !== t.id;
+          const isBetweenActive: boolean = (dropBetweenIndex === idx && dragId !== t.id) || (touchDropIndex === idx && touchDragId !== null && touchDragId !== t.id);
+          const isAfterActive: boolean = (dropBetweenIndex === (idx + 1) && dragId !== t.id) || (touchDropIndex === (idx + 1) && touchDragId !== null && touchDragId !== t.id);
 
           return (
             <div key={t.id}>
               {/* カード間ドロップゾーン（常にDOMに存在） */}
               <div
                 className={`${styles.dropZone} ${isBetweenActive ? styles.dropZoneActive : ''}`}
-                style={{ marginLeft: depth > 0 ? 21 : 0, display: dragId ? 'block' : 'none' }}
+                style={{ marginLeft: depth > 0 ? 21 : 0, display: (dragId || touchDragId) ? 'block' : 'none' }}
                 onDragOver={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
@@ -2916,13 +2923,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               </div>
             <article
               ref={(el) => { cardRefsMap.current[t.id] = el; }}
+              data-todo-id={t.id}
               className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''}`}
               style={{
                 fontSize: Math.pow(0.9, depth) + 'em',
                 flex: 1,
-                transform: swipeOffset[t.id] ? `translateX(${swipeOffset[t.id]}px)` : undefined,
-                transition: swipeOffset[t.id] ? 'none' : 'transform 0.3s ease',
-                background: swipeAction[t.id] === 'nest' ? '#dbeafe' : swipeAction[t.id] === 'unnest' ? '#fef3c7' : undefined,
+                transform: touchDragId === t.id
+                  ? `translateY(${touchDragY}px)`
+                  : swipeOffset[t.id] ? `translateX(${swipeOffset[t.id]}px)` : undefined,
+                transition: touchDragId === t.id ? 'none' : swipeOffset[t.id] ? 'none' : 'transform 0.3s ease',
+                background: touchDragId === t.id ? 'var(--card-bg)' : swipeAction[t.id] === 'nest' ? '#dbeafe' : swipeAction[t.id] === 'unnest' ? '#fef3c7' : undefined,
+                opacity: touchDragId === t.id ? 0.8 : 1,
+                boxShadow: touchDragId === t.id ? '0 8px 24px rgba(0,0,0,0.2)' : undefined,
+                zIndex: touchDragId === t.id ? 100 : undefined,
+                position: touchDragId === t.id ? 'relative' as const : undefined,
               }}
               onClick={() => {
                 if (!isDraggingRef.current) {
@@ -2936,15 +2950,70 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 }
                 const touch = e.touches[0];
                 touchStartRef.current = { x: touch.clientX, y: touch.clientY, id: t.id, time: Date.now() };
+                touchDragStartY.current = touch.clientY;
+                // 長押しタイマー（500ms）
+                if (longPressTimerRef.current) {
+                  clearTimeout(longPressTimerRef.current);
+                }
+                longPressTimerRef.current = setTimeout(() => {
+                  // 長押し成立 → ドラッグモード開始
+                  setTouchDragId(t.id);
+                  setTouchDragY(0);
+                  // スワイプをキャンセル
+                  touchStartRef.current = null;
+                  setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
+                  setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                  // 振動フィードバック（対応ブラウザのみ）
+                  if (navigator.vibrate) {
+                    navigator.vibrate(50);
+                  }
+                }, 500);
               }}
               onTouchMove={(e) => {
-                if (!isMobile || !touchStartRef.current || touchStartRef.current.id !== t.id) {
+                if (!isMobile) {
                   return;
                 }
                 const touch = e.touches[0];
+
+                // ドラッグモード中の処理
+                if (touchDragId === t.id) {
+                  e.preventDefault();
+                  const dy: number = touch.clientY - touchDragStartY.current;
+                  setTouchDragY(dy);
+                  // ドロップ先のインデックスを計算
+                  const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
+                  let dropIdx: number | null = null;
+                  for (let i = 0; i < cards.length; i++) {
+                    const rect: DOMRect = cards[i].getBoundingClientRect();
+                    const mid: number = rect.top + rect.height / 2;
+                    if (touch.clientY < mid) {
+                      dropIdx = i;
+                      break;
+                    }
+                  }
+                  if (dropIdx === null) {
+                    dropIdx = cards.length;
+                  }
+                  setTouchDropIndex(dropIdx);
+                  return;
+                }
+
+                // 長押しタイマー中に動いたらキャンセル
+                if (longPressTimerRef.current) {
+                  const dx: number = touch.clientX - (touchStartRef.current?.x ?? 0);
+                  const dy: number = touch.clientY - (touchStartRef.current?.y ?? 0);
+                  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                    clearTimeout(longPressTimerRef.current);
+                    longPressTimerRef.current = null;
+                  }
+                }
+
+                // 左右スワイプ処理（既存）
+                if (!touchStartRef.current || touchStartRef.current.id !== t.id) {
+                  return;
+                }
                 const dx: number = touch.clientX - touchStartRef.current.x;
                 const dy: number = touch.clientY - touchStartRef.current.y;
-                // 縦スクロールが大きければスワイプとみなさない
                 if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
                   touchStartRef.current = null;
                   setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
@@ -2964,7 +3033,64 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 }
               }}
               onTouchEnd={() => {
-                if (!isMobile || !touchStartRef.current || touchStartRef.current.id !== t.id) {
+                if (!isMobile) {
+                  return;
+                }
+                // 長押しタイマーをクリア
+                if (longPressTimerRef.current) {
+                  clearTimeout(longPressTimerRef.current);
+                  longPressTimerRef.current = null;
+                }
+
+                // ドラッグモード終了 → ドロップ処理
+                if (touchDragId === t.id && touchDropIndex !== null) {
+                  const currentIdx: number = filteredTreeList.findIndex((item) => item.todo.id === t.id);
+                  if (currentIdx !== -1 && touchDropIndex !== currentIdx) {
+                    const targetIdx: number = touchDropIndex > currentIdx ? touchDropIndex - 1 : touchDropIndex;
+                    const prevItem: { todo: Todo } | undefined = filteredTreeList[targetIdx - 1];
+                    const nextItem: { todo: Todo } | undefined = filteredTreeList[targetIdx];
+                    let newOrder: number;
+                    if (prevItem && nextItem) {
+                      newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
+                    } else if (prevItem) {
+                      newOrder = prevItem.todo.sortOrder + 10;
+                    } else if (nextItem) {
+                      newOrder = nextItem.todo.sortOrder - 10;
+                    } else {
+                      newOrder = 0;
+                    }
+                    const descendantIds: string[] = getDescendantIds(t.id, todos);
+                    const movedIds: Set<string> = new Set([t.id, ...descendantIds]);
+                    const oldOrder: number = t.sortOrder;
+                    const diff: number = newOrder - oldOrder;
+                    const updates: { id: string; sortOrder: number }[] = [];
+                    const rollback: Todo[] = todos;
+                    setTodos((prev) =>
+                      prev.map((todo) => {
+                        if (movedIds.has(todo.id)) {
+                          const updatedOrder: number = todo.sortOrder + diff;
+                          updates.push({ id: todo.id, sortOrder: updatedOrder });
+                          return { ...todo, sortOrder: updatedOrder };
+                        }
+                        return todo;
+                      }),
+                    );
+                    persistSortOrders(updates, rollback);
+                  }
+                  setTouchDragId(null);
+                  setTouchDragY(0);
+                  setTouchDropIndex(null);
+                  return;
+                }
+
+                // 長押しドラッグがなかった場合はスワイプ処理
+                if (touchDragId) {
+                  setTouchDragId(null);
+                  setTouchDragY(0);
+                  setTouchDropIndex(null);
+                }
+
+                if (!touchStartRef.current || touchStartRef.current.id !== t.id) {
                   return;
                 }
                 const action = swipeAction[t.id];
