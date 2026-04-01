@@ -2708,14 +2708,21 @@
     padding: 1px 4px !important;
   }
 
-  /* スマホ: 詳細は展開時のみ表示 */
+  /* スマホ: 詳細をタイトルの下に1行で表示 */
   .taskDetail {
-    display: none !important;
+    display: block !important;
+    font-size: 12px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px !important;
+    margin-top: 0 !important;
   }
 
   .taskDetailExpanded {
     display: block !important;
-    font-size: 13px !important;
+    font-size: 12px !important;
+    white-space: normal;
   }
 
   .taskProgress {
@@ -3156,12 +3163,19 @@
   }
 
   .taskDetail {
-    display: none;
+    display: block;
+    font-size: 12px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+    margin-top: 0;
   }
 
   .taskDetailExpanded {
     display: block;
     font-size: 12px;
+    white-space: normal;
   }
 
   .taskProgress {
