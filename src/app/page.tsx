@@ -3965,7 +3965,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       {activeTab === 'settings' && (
         <SettingsPanel
           settings={settings}
-          onUpdate={(updated: UserSettings) => setSettings(updated)}
+          onUpdate={(updated: UserSettings) => { setSettings(updated); try { localStorage.setItem('kiroku:settings:' + user.id, JSON.stringify(updated)); } catch { /* ignore */ } }}
           userId={user.id}
         />
       )}
