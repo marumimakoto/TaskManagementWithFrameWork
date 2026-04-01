@@ -3538,7 +3538,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   期限: {formatDeadline(t.deadline)}
                 </div>
               )}
-              {expandedId === t.id && renderExpandedContent(t)}
+              {expandedId === t.id && (
+                <div onClick={(e) => e.stopPropagation()}>
+                  {renderExpandedContent(t)}
+                </div>
+              )}
             </div>
           );
         }
