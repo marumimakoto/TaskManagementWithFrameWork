@@ -50,7 +50,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const [dailyCategoryData, setDailyCategoryData] = useState<{ date: string; total: number; byCategory: Record<string, number> }[]>([]);
   const [allCategories, setAllCategories] = useState<string[]>([]);
   const [visibleCategories, setVisibleCategories] = useState<Set<string>>(new Set());
-  const [chartMode, setChartMode] = useState<'line' | 'bar'>('line');
+  const [chartMode, setChartMode] = useState<'line' | 'bar'>('bar');
   const [dailyStats, setDailyStats] = useState<DailyStat[]>([]);
   const [paretoData, setParetoData] = useState<ParetoItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -127,6 +127,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([date, data]) => ({ date, ...data }));
         setDailyCategoryData(dailyCat);
+        console.log('[activity-debug] dailyCat:', dailyCat.length, 'items, catData:', catData.length);
       } catch { /* ignore */ }
     } catch (e) {
       console.warn('Failed to fetch activity', e);
@@ -451,7 +452,9 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
               if (viewMode === 'list') {
                 header = '日付\tタイトル\t内容';
                 lines = filteredEntries.map((entry: ActivityEntry) => {
-                  return `${entry.date}\t${entry.title}\t${entry.content}`;
+                  const cleanTitle: string = entry.title.replace(/[\r\n\t]/g, ' ');
+                  const cleanContent: string = entry.content.replace(/[\r\n\t]/g, ' ');
+                  return `${entry.date}\t${cleanTitle}\t${cleanContent}`;
                 });
                 filename = 'activity-list';
               } else if (viewMode === 'stats') {
@@ -599,16 +602,16 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         return (
           <div>
             {/* モード切替 + 合計 */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ display: 'flex', gap: 4 }}>
-                <button type="button" onClick={() => setChartMode('line')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: chartMode === 'line' ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: chartMode === 'line' ? '#dbeafe' : 'var(--card-bg)', fontWeight: chartMode === 'line' ? 600 : 400 }}>折れ線</button>
-                <button type="button" onClick={() => setChartMode('bar')} style={{ padding: '4px 10px', borderRadius: 6, fontSize: 12, cursor: 'pointer', border: chartMode === 'bar' ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: chartMode === 'bar' ? '#dbeafe' : 'var(--card-bg)', fontWeight: chartMode === 'bar' ? 600 : 400 }}>棒グラフ</button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ display: 'flex', gap: 0 }}>
+                <button type="button" onClick={() => setChartMode('bar')} style={{ padding: '8px 16px', borderRadius: '8px 0 0 8px', fontSize: 13, cursor: 'pointer', border: '1px solid var(--card-border)', background: chartMode === 'bar' ? '#3b82f6' : 'var(--card-bg)', color: chartMode === 'bar' ? 'white' : 'var(--foreground)', fontWeight: 600 }}>棒グラフ</button>
+                <button type="button" onClick={() => setChartMode('line')} style={{ padding: '8px 16px', borderRadius: '0 8px 8px 0', fontSize: 13, cursor: 'pointer', border: '1px solid var(--card-border)', borderLeft: 'none', background: chartMode === 'line' ? '#3b82f6' : 'var(--card-bg)', color: chartMode === 'line' ? 'white' : 'var(--foreground)', fontWeight: 600 }}>折れ線</button>
               </div>
               <span style={{ fontSize: 14, fontWeight: 700, color: '#3b82f6' }}>合計 {minutesToText(totalMin)}</span>
             </div>
 
-            {/* カテゴリフィルターボタン */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
+            {/* カテゴリフィルターボタン（折れ線モード時のみ） */}
+            {chartMode === 'line' && <div style={{ display: 'flex', gap: 4, marginBottom: 12, flexWrap: 'wrap' }}>
               <button type="button" onClick={() => setVisibleCategories(new Set())} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, cursor: 'pointer', border: visibleCategories.size === 0 ? '2px solid #3b82f6' : '1px solid var(--card-border)', background: visibleCategories.size === 0 ? '#dbeafe' : 'var(--card-bg)', fontWeight: visibleCategories.size === 0 ? 600 : 400 }}>合計のみ</button>
               {allCategories.map((cat) => {
                 const active: boolean = visibleCategories.has(cat);
@@ -616,7 +619,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
                   <button key={cat} type="button" onClick={() => { setVisibleCategories((prev) => { const next = new Set(prev); if (next.has(cat)) { next.delete(cat); } else { next.add(cat); } return next; }); }} style={{ padding: '3px 8px', borderRadius: 999, fontSize: 11, cursor: 'pointer', border: active ? `2px solid ${colorMap[cat]}` : '1px solid var(--card-border)', background: active ? colorMap[cat] + '22' : 'var(--card-bg)', color: active ? colorMap[cat] : 'var(--foreground)', fontWeight: active ? 600 : 400 }}>{cat}</button>
                 );
               })}
-            </div>
+            </div>}
 
             {/* 折れ線グラフ */}
             {chartMode === 'line' && dailyCategoryData.length === 0 && (
