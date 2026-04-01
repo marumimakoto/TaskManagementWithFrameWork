@@ -85,6 +85,8 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
   const [message, setMessage] = useState<string>('');
   const [undoItem, setUndoItem] = useState<RecurringTodo | null>(null);
   const [recurringView, setRecurringView] = useState<'rules' | 'stats' | 'time'>('rules');
+  const [addedTodoId, setAddedTodoId] = useState<string | null>(null);
+  const [addedTodoTitle, setAddedTodoTitle] = useState<string | null>(null);
   const [totalActualByTitle, setTotalActualByTitle] = useState<Record<string, number>>({});
   const [calendarFlags, setCalendarFlags] = useState<Record<string, boolean>>(() => {
     try {
@@ -246,6 +248,25 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
             「{undoItem.title}」の繰り返しを解除しました
           </div>
           <button onClick={undoRemove} className={styles.iconBtn}>
+            取り消す
+          </button>
+        </div>
+      )}
+      {addedTodoId && addedTodoTitle && (
+        <div className={styles.toast} style={{ position: 'relative', marginBottom: 8 }}>
+          <div className={styles.toastMessage}>
+            「{addedTodoTitle}」を今日のタスクに追加しました
+          </div>
+          <button
+            onClick={async () => {
+              await fetch('/api/todos/' + addedTodoId, { method: 'DELETE' });
+              setAddedTodoId(null);
+              setAddedTodoTitle(null);
+              onRefresh();
+              showMsg('追加を取り消しました');
+            }}
+            className={styles.iconBtn}
+          >
             取り消す
           </button>
         </div>
@@ -460,7 +481,14 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                         body: JSON.stringify({ userId: user.id, todo }),
                       });
                       onRefresh();
-                      showMsg(`「${t.title}」を今日のタスクに追加しました`);
+                      // Undoトースト
+                      setUndoItem(null);
+                      setAddedTodoId(newId);
+                      setAddedTodoTitle(t.title);
+                      setTimeout(() => {
+                        setAddedTodoId(null);
+                        setAddedTodoTitle(null);
+                      }, 5000);
                     }}
                   >
                     今日追加
