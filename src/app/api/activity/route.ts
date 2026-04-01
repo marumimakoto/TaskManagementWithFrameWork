@@ -203,16 +203,30 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // 日別の作業時間合計（last_worked_atがその日のタスクのactual_min合計）
+  // 日別の作業時間合計
+  // todosとarchived_todosの両方から、last_worked_atの日ごとにactual_minを集計
   {
-    let query: string = 'SELECT last_worked_at, actual_min FROM todos WHERE user_id = ? AND last_worked_at IS NOT NULL AND actual_min > 0';
-    const queryParams: (string | number)[] = [userId];
+    const allTasks: { last_worked_at: number; actual_min: number }[] = [];
+    // 現在のタスク
+    let q1: string = 'SELECT last_worked_at, actual_min FROM todos WHERE user_id = ? AND last_worked_at IS NOT NULL AND actual_min > 0';
+    const p1: (string | number)[] = [userId];
     if (range) {
-      query += ' AND last_worked_at BETWEEN ? AND ?';
-      queryParams.push(range.start, range.end);
+      q1 += ' AND last_worked_at BETWEEN ? AND ?';
+      p1.push(range.start, range.end);
     }
-    const rows = await db.all<{ last_worked_at: number; actual_min: number }>(query, ...queryParams);
-    for (const row of rows) {
+    const rows1 = await db.all<{ last_worked_at: number; actual_min: number }>(q1, ...p1);
+    allTasks.push(...rows1);
+    // アーカイブ
+    let q2: string = 'SELECT archived_at as last_worked_at, actual_min FROM archived_todos WHERE user_id = ? AND actual_min > 0';
+    const p2: (string | number)[] = [userId];
+    if (range) {
+      q2 += ' AND archived_at BETWEEN ? AND ?';
+      p2.push(range.start, range.end);
+    }
+    const rows2 = await db.all<{ last_worked_at: number; actual_min: number }>(q2, ...p2);
+    allTasks.push(...rows2);
+
+    for (const row of allTasks) {
       const d: string = tsToDate(row.last_worked_at);
       let stat = statsMap.get(d);
       if (!stat) {

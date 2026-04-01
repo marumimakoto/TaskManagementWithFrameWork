@@ -463,16 +463,10 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
                     {filteredStats.reduce((sum, s) => sum + s.workLogs, 0)}
                   </span>
                   <span className={styles.statsCell}>
-                    {filteredStats.reduce((sum, s) => sum + s.created, 0)}
-                  </span>
-                  <span className={styles.statsCell}>
                     {filteredStats.reduce((sum, s) => sum + s.completed, 0)}
                   </span>
                   <span className={styles.statsCell}>
-                    {filteredStats.reduce((sum, s) => sum + s.deleted, 0)}
-                  </span>
-                  <span className={styles.statsCell}>
-                    {minutesToText(dailyStats.reduce((sum, s) => sum + s.workedMin, 0))}
+                    {minutesToText(filteredStats.reduce((sum, s) => sum + s.workedMin, 0))}
                   </span>
                 </div>
               </div>
