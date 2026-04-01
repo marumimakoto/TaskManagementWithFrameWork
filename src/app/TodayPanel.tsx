@@ -16,16 +16,45 @@ export default function TodayPanel({
   onAddLog,
   todayActualMap = {},
   renderExpanded,
+  onFieldEdit,
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
   todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
+  onFieldEdit?: (todoId: string, field: string, value: string) => void;
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
+  const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
+  const [editingField, setEditingField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState<string>('');
+
+  function startEdit(t: Todo, field: string): void {
+    setEditingTodoId(t.id);
+    setEditingField(field);
+    if (field === 'title') {
+      setEditValue(t.title);
+    } else if (field === 'detail') {
+      setEditValue(t.detail ?? '');
+    } else if (field === 'est') {
+      setEditValue(String(t.estMin));
+    } else if (field === 'actual') {
+      setEditValue(String(t.actualMin));
+    } else if (field === 'deadline') {
+      setEditValue(t.deadline ? new Date(t.deadline).toISOString().slice(0, 10) : '');
+    }
+  }
+
+  function saveEdit(todoId: string): void {
+    if (onFieldEdit && editingField) {
+      onFieldEdit(todoId, editingField, editValue);
+    }
+    setEditingTodoId(null);
+    setEditingField(null);
+  }
 
   const undoneTodos: Todo[] = useMemo(() => {
     return todos.filter((t) => !t.done);
@@ -105,22 +134,63 @@ export default function TodayPanel({
             </button>
           )}
           <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 600, textDecoration: t.done ? 'line-through' : 'none', opacity: t.done ? 0.6 : 1 }}>
-              {t.title}
-              {t.category && (
-                <span style={{ marginLeft: 6, fontSize: 11, padding: '1px 6px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
-                  {t.category}
+            {/* タイトル */}
+            {isExpanded && editingTodoId === t.id && editingField === 'title' ? (
+              <input
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => { if (e.key === 'Enter') { saveEdit(t.id); } if (e.key === 'Escape') { setEditingTodoId(null); } }}
+                onBlur={() => saveEdit(t.id)}
+                className={styles.input}
+                style={{ fontWeight: 600, fontSize: 15 }}
+                autoFocus
+              />
+            ) : (
+              <div
+                style={{ fontWeight: 600, textDecoration: t.done ? 'line-through' : 'none', opacity: t.done ? 0.6 : 1 }}
+                onDoubleClick={isExpanded && onFieldEdit ? (e) => { e.stopPropagation(); startEdit(t, 'title'); } : undefined}
+                title={isExpanded ? 'ダブルクリックで編集' : undefined}
+              >
+                {t.title}
+                {t.category && (
+                  <span style={{ marginLeft: 6, fontSize: 11, padding: '1px 6px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
+                    {t.category}
+                  </span>
+                )}
+              </div>
+            )}
+            {/* 予定/実績 */}
+            <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+              {isExpanded && editingTodoId === t.id && editingField === 'est' ? (
+                <span>📋<input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Enter') { saveEdit(t.id); } if (e.key === 'Escape') { setEditingTodoId(null); } }} onBlur={() => saveEdit(t.id)} style={{ width: 60 }} className={styles.inputNarrow} autoFocus />分</span>
+              ) : (
+                <span onDoubleClick={isExpanded && onFieldEdit ? (e) => { e.stopPropagation(); startEdit(t, 'est'); } : undefined} style={{ cursor: isExpanded ? 'pointer' : 'default' }}>
+                  📋{minutesToText(t.estMin)}
+                </span>
+              )}
+              {' / '}
+              {isExpanded && editingTodoId === t.id && editingField === 'actual' ? (
+                <span>⏱<input type="number" value={editValue} onChange={(e) => setEditValue(e.target.value)} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Enter') { saveEdit(t.id); } if (e.key === 'Escape') { setEditingTodoId(null); } }} onBlur={() => saveEdit(t.id)} style={{ width: 60 }} className={styles.inputNarrow} autoFocus />分</span>
+              ) : (
+                <span onDoubleClick={isExpanded && onFieldEdit ? (e) => { e.stopPropagation(); startEdit(t, 'actual'); } : undefined} style={{ cursor: isExpanded ? 'pointer' : 'default' }}>
+                  ⏱{minutesToText(t.actualMin)}
                 </span>
               )}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--muted)' }}>
-              📋{minutesToText(t.estMin)} / ⏱{minutesToText(t.actualMin)}
-            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: 2 }}>
-            {t.deadline && (
-              <span style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap' }}>⏰ {formatDeadline(t.deadline)}</span>
-            )}
+            {/* 期限 */}
+            {isExpanded && editingTodoId === t.id && editingField === 'deadline' ? (
+              <input type="date" value={editValue} onChange={(e) => setEditValue(e.target.value)} onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Enter') { saveEdit(t.id); } if (e.key === 'Escape') { setEditingTodoId(null); } }} onBlur={() => saveEdit(t.id)} className={styles.inputNarrow} autoFocus />
+            ) : t.deadline ? (
+              <span
+                style={{ fontSize: 13, color: 'var(--muted)', whiteSpace: 'nowrap', cursor: isExpanded ? 'pointer' : 'default' }}
+                onDoubleClick={isExpanded && onFieldEdit ? (e) => { e.stopPropagation(); startEdit(t, 'deadline'); } : undefined}
+              >
+                ⏰ {formatDeadline(t.deadline)}
+              </span>
+            ) : null}
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
           </div>
         </div>

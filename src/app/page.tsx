@@ -3682,6 +3682,36 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             });
           }}
           renderExpanded={(t: Todo) => renderExpandedContent(t)}
+          onFieldEdit={(todoId: string, field: string, value: string) => {
+            const updates: Record<string, unknown> = {};
+            if (field === 'title') {
+              const trimmed: string = value.trim();
+              if (!trimmed) { return; }
+              updates.title = trimmed;
+              setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, title: trimmed } : t)));
+            } else if (field === 'detail') {
+              updates.detail = value.trim();
+              setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, detail: value.trim() || undefined } : t)));
+            } else if (field === 'est') {
+              const est: number = Math.max(1, parseInt(value || '0', 10));
+              updates.estMin = est;
+              setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, estMin: est } : t)));
+            } else if (field === 'actual') {
+              const actual: number = Math.max(0, parseInt(value || '0', 10));
+              updates.actualMin = actual;
+              updates.lastWorkedAt = Date.now();
+              setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, actualMin: actual, lastWorkedAt: Date.now() } : t)));
+            } else if (field === 'deadline') {
+              const deadline: number | undefined = value ? new Date(value + 'T23:59:59').getTime() : undefined;
+              updates.deadline = deadline ?? null;
+              setTodos((prev) => prev.map((t) => (t.id === todoId ? { ...t, deadline } : t)));
+            }
+            fetch('/api/todos/' + todoId, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates }),
+            });
+          }}
         />
         );
       })()}
