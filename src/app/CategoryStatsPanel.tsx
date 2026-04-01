@@ -122,17 +122,17 @@ export default function CategoryStatsPanel({
       }
     }
 
-    // カテゴリ情報のルックアップマップ（todosから取得）
-    const categoryMap: Map<string, string> = new Map();
+    // カテゴリ情報のルックアップマップ（todosのタイトルからカテゴリを取得）
+    const categoryByTitle: Map<string, string> = new Map();
     for (const todo of todos) {
       if (todo.category) {
-        categoryMap.set(todo.id, todo.category);
+        categoryByTitle.set(todo.title, todo.category);
       }
     }
 
-    // アーカイブされたタスク（カテゴリはtodosのIDと一致するものから取得、なければ未分類）
+    // アーカイブされたタスク（タイトルでカテゴリを照合、なければ未分類）
     for (const archived of archivedTodos) {
-      const category: string = categoryMap.get(archived.id) || '未分類';
+      const category: string = categoryByTitle.get(archived.title) || '未分類';
       result.push({
         id: archived.id,
         title: archived.title,
