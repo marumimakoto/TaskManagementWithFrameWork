@@ -55,6 +55,15 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const range = getRange();
   const entries: ActivityEntry[] = [];
 
+  // カテゴリ情報を事前に取得（全セクションで共有）
+  const catMap: Map<string, string> = new Map();
+  try {
+    const catRows = await db.all<{ id: string; category: string }>('SELECT id, category FROM todos WHERE user_id = ?', userId);
+    for (const r of catRows) {
+      catMap.set(r.id, r.category || '');
+    }
+  } catch { /* category column may not exist */ }
+
   // 1. 作業ログ（削除済みタスクの作業ログも含む）
   try {
     let query: string = `
@@ -76,18 +85,6 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const rows = await db.all<{
       id: string; todo_id: string; title: string; content: string; date: string; created_at: number;
     }>(query, ...queryParams);
-
-    // カテゴリ情報を別途取得（todosテーブルから）
-    const todoIdSet: Set<string> = new Set(rows.map((r) => r.todo_id));
-    const catMap: Map<string, string> = new Map();
-    if (todoIdSet.size > 0) {
-      try {
-        const catRows = await db.all<{ id: string; category: string }>('SELECT id, category FROM todos WHERE user_id = ?', userId);
-        for (const r of catRows) {
-          catMap.set(r.id, r.category || '');
-        }
-      } catch { /* category column may not exist */ }
-    }
 
     for (const row of rows) {
       entries.push({
@@ -123,7 +120,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを作成しました',
         date: tsToDate(row.created_at),
         timestamp: row.created_at,
-        category: '未分類',
+        category: catMap.get(row.id) || '未分類',
       });
     }
   } catch (e) {
@@ -148,7 +145,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを完了しました',
         date: tsToDate(row.last_worked_at),
         timestamp: row.last_worked_at,
-        category: '未分類',
+        category: catMap.get(row.id) || '未分類',
       });
     }
     // アーカイブから完了タスク（削除されても完了記録は残る）

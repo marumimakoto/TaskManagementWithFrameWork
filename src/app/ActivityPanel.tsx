@@ -83,12 +83,18 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
 
       // カテゴリ別実績を集計（todosとアーカイブから）
       try {
-        const [todosRes, archiveRes] = await Promise.all([
+        const [todosRes, archiveRes, catListRes] = await Promise.all([
           fetch('/api/todos?userId=' + user.id),
           fetch('/api/todos/archive?userId=' + user.id),
+          fetch('/api/todo-categories?userId=' + user.id),
         ]);
         const todos = await todosRes.json();
         const archived = await archiveRes.json();
+
+        // ユーザー定義カテゴリ一覧を取得
+        const catList: { id: string; name: string }[] = Array.isArray(await catListRes.clone().json()) ? await catListRes.json() : [];
+        const userCategories: string[] = catList.map((c: { id: string; name: string }) => c.name);
+
         const catMap: Map<string, number> = new Map();
         for (const t of [...todos, ...archived]) {
           const cat: string = t.category || '未分類';
@@ -99,7 +105,13 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
           .filter((d) => d.totalMin > 0)
           .sort((a, b) => b.totalMin - a.totalMin);
         setCategoryData(catData);
-        setAllCategories(catData.map((d) => d.category));
+
+        // allCategories: ユーザー定義カテゴリ + 実績にあるカテゴリをマージ
+        const catSet: Set<string> = new Set<string>(userCategories);
+        for (const d of catData) {
+          catSet.add(d.category);
+        }
+        setAllCategories([...catSet]);
 
         // 日別×カテゴリの集計
         const dailyMap: Map<string, { total: number; byCategory: Record<string, number> }> = new Map();
@@ -129,7 +141,6 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
             .sort((a, b) => a[0].localeCompare(b[0]))
             .map(([date, data]) => ({ date, ...data }));
         setDailyCategoryData(dailyCat);
-        console.log('[activity-debug] dailyCat:', dailyCat.length, 'items, catData:', catData.length);
       } catch (catErr) { console.warn('[activity] category fetch failed:', catErr); }
     } catch (e) {
       console.warn('Failed to fetch activity', e);
@@ -721,10 +732,22 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
                       return <g key={i}><line x1={padL} y1={y} x2={svgW - padR} y2={y} stroke="#e5e7eb" /><text x={padL - 5} y={y + 4} textAnchor="end" fontSize="10" fill="#6b7280">{Math.round((maxVal / 4) * i)}分</text></g>;
                     })}
                     {/* 合計ライン */}
-                    <path d={makePath(data.map((d) => d.total))} fill="none" stroke="#3b82f6" strokeWidth="2" />
+                    {data.length > 1 && <path d={makePath(data.map((d) => d.total))} fill="none" stroke="#3b82f6" strokeWidth="2" />}
+                    {/* 合計の点 + 値ラベル */}
+                    {data.map((d, i) => (
+                      <g key={'dot-' + d.date}>
+                        <circle cx={toX(i)} cy={toY(d.total)} r={4} fill="#3b82f6" />
+                        <text x={toX(i)} y={toY(d.total) - 8} textAnchor="middle" fontSize="10" fill="#3b82f6" fontWeight="600">{d.total}分</text>
+                      </g>
+                    ))}
                     {/* カテゴリライン */}
                     {allCategories.filter((cat) => visibleCategories.has(cat)).map((cat) => (
-                      <path key={cat} d={makePath(data.map((d) => d.byCategory[cat] ?? 0))} fill="none" stroke={colorMap[cat]} strokeWidth="2" strokeDasharray="4 2" />
+                      <g key={cat}>
+                        {data.length > 1 && <path d={makePath(data.map((d) => d.byCategory[cat] ?? 0))} fill="none" stroke={colorMap[cat]} strokeWidth="2" strokeDasharray="4 2" />}
+                        {data.map((d, i) => (
+                          <circle key={'cat-dot-' + d.date} cx={toX(i)} cy={toY(d.byCategory[cat] ?? 0)} r={3} fill={colorMap[cat]} />
+                        ))}
+                      </g>
                     ))}
                     {/* X軸ラベル */}
                     {data.map((d, i) => {
