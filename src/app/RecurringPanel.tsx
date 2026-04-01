@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
-import { minutesToText } from './utils';
+import { minutesToText, uid } from './utils';
 import styles from './page.module.css';
 import RecurrenceSelector from './RecurrenceSelector';
 
@@ -374,6 +374,44 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
                 </div>
               ) : (
                 <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
+                  <button
+                    type="button"
+                    className={styles.primaryBtn}
+                    style={{ fontSize: '12px', padding: '4px 10px' }}
+                    onClick={async () => {
+                      // このルールのタスクを今日のタスクとして追加
+                      const newId: string = uid();
+                      let deadline: number | null = null;
+                      if (t.deadlineOffsetDays !== null && t.deadlineOffsetDays !== undefined) {
+                        const d: Date = new Date();
+                        d.setDate(d.getDate() + t.deadlineOffsetDays);
+                        d.setHours(23, 59, 59, 999);
+                        deadline = d.getTime();
+                      }
+                      const todo = {
+                        id: newId,
+                        title: t.title,
+                        estMin: t.estMin,
+                        actualMin: 0,
+                        stuckHours: 0,
+                        recurrence: t.recurrence,
+                        detail: t.detail ?? '',
+                        deadline,
+                        started: false,
+                        done: false,
+                        sortOrder: 0,
+                      };
+                      await fetch('/api/todos', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: user.id, todo }),
+                      });
+                      onRefresh();
+                      showMsg(`「${t.title}」を今日のタスクに追加しました`);
+                    }}
+                  >
+                    今日追加
+                  </button>
                   <button
                     type="button"
                     className={styles.iconBtn}
