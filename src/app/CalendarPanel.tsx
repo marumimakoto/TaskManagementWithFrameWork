@@ -84,6 +84,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
   const [currentYear, setCurrentYear] = useState<number>(now.getFullYear());
   const [currentMonth, setCurrentMonth] = useState<number>(now.getMonth());
   const [selectedDateKey, setSelectedDateKey] = useState<string | null>(null);
+  const [showRecurring, setShowRecurring] = useState<boolean>(true);
 
   /** 日付キー → その日が期限のTodo配列のマップ */
   const todosByDate: Map<string, Todo[]> = useMemo(() => {
@@ -104,7 +105,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
     }
 
     // 繰り返しルールから今月・来月の該当日を計算してカレンダーに表示
-    if (recurringRules.length > 0) {
+    if (showRecurring && recurringRules.length > 0) {
       const today: Date = new Date();
       today.setHours(0, 0, 0, 0);
       // 今月1日から来月末日まで
@@ -187,7 +188,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
     }
 
     return map;
-  }, [todos, recurringRules, currentYear, currentMonth]);
+  }, [todos, recurringRules, currentYear, currentMonth, showRecurring]);
 
   /** 前月に移動する */
   function goToPreviousMonth(): void {
@@ -292,6 +293,20 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
           次月 &gt;
         </button>
       </div>
+
+      {/* 繰り返しタスク表示トグル */}
+      {recurringRules.length > 0 && (
+        <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontSize: 13, color: 'var(--muted)' }}>
+            <input
+              type="checkbox"
+              checked={showRecurring}
+              onChange={(e) => setShowRecurring(e.target.checked)}
+            />
+            繰り返しタスクを表示
+          </label>
+        </div>
+      )}
 
       {/* 曜日ヘッダー */}
       <div
@@ -403,26 +418,7 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
                 >
                   {day}
                 </span>
-                {/* タスク件数バッジ */}
-                {hasTodos && (
-                  <span
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      minWidth: '18px',
-                      height: '18px',
-                      borderRadius: '9px',
-                      background: '#667eea',
-                      color: '#fff',
-                      fontSize: '11px',
-                      fontWeight: 'bold',
-                      padding: '0 4px',
-                    }}
-                  >
-                    {dayTodos.length}
-                  </span>
-                )}
+                {/* タスク件数バッジは削除済み */}
               </div>
 
               {/* タスク名を最大3件まで表示 */}
