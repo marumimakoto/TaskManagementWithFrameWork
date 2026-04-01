@@ -54,15 +54,16 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const range = getRange();
   const entries: ActivityEntry[] = [];
 
-  // 1. 作業ログ
+  // 1. 作業ログ（削除済みタスクの作業ログも含む）
   {
     let query: string = `
-      SELECT w.id, w.todo_id, t.title, w.content, w.date, w.created_at
+      SELECT w.id, w.todo_id, COALESCE(t.title, a.title, '不明なタスク') as title, w.content, w.date, w.created_at
       FROM work_logs w
-      JOIN todos t ON w.todo_id = t.id
-      WHERE t.user_id = ?
+      LEFT JOIN todos t ON w.todo_id = t.id
+      LEFT JOIN archived_todos a ON w.todo_id = a.id
+      WHERE (t.user_id = ? OR a.user_id = ?)
     `;
-    const queryParams: (string | number)[] = [userId];
+    const queryParams: (string | number)[] = [userId, userId];
     if (from) {
       query += ' AND w.date >= ?';
       queryParams.push(from);
