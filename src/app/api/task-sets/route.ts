@@ -33,31 +33,42 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   const db = await getDb();
+  // セットとアイテムを1回のクエリで取得（N+1解消）
   const sets: TaskSetRow[] = await db.all<TaskSetRow>(
     'SELECT * FROM task_sets WHERE user_id = ? ORDER BY created_at DESC', userId
   );
 
-  const result = [];
-  for (const s of sets) {
-    const items: TaskSetItemRow[] = await db.all<TaskSetItemRow>(
-      'SELECT * FROM task_set_items WHERE set_id = ? ORDER BY sort_order ASC', s.id
-    );
-    result.push({
-      id: s.id,
-      name: s.name,
-      isPublic: s.is_public === 1,
-      items: items.map((item: TaskSetItemRow) => ({
-        id: item.id,
-        parentId: item.parent_id ?? undefined,
-        title: item.title,
-        estMin: item.est_min,
-        detail: item.detail || undefined,
-        recurrence: item.recurrence,
-        deadline: item.deadline || undefined,
-        sortOrder: item.sort_order,
-      })),
-    });
+  const setIds: string[] = sets.map((s) => s.id);
+  const allItems: TaskSetItemRow[] = setIds.length > 0
+    ? await db.all<TaskSetItemRow>(
+        `SELECT * FROM task_set_items WHERE set_id IN (${setIds.map(() => '?').join(',')}) ORDER BY sort_order ASC`,
+        ...setIds
+      )
+    : [];
+
+  // set_id でグループ化
+  const itemsBySetId: Map<string, TaskSetItemRow[]> = new Map();
+  for (const item of allItems) {
+    const list: TaskSetItemRow[] = itemsBySetId.get(item.set_id) ?? [];
+    list.push(item);
+    itemsBySetId.set(item.set_id, list);
   }
+
+  const result = sets.map((s) => ({
+    id: s.id,
+    name: s.name,
+    isPublic: s.is_public === 1,
+    items: (itemsBySetId.get(s.id) ?? []).map((item: TaskSetItemRow) => ({
+      id: item.id,
+      parentId: item.parent_id ?? undefined,
+      title: item.title,
+      estMin: item.est_min,
+      detail: item.detail || undefined,
+      recurrence: item.recurrence,
+      deadline: item.deadline || undefined,
+      sortOrder: item.sort_order,
+    })),
+  }));
 
   return NextResponse.json(result);
 }
