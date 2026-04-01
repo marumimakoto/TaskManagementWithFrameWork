@@ -5,6 +5,8 @@ import type { Todo } from './types';
 import { minutesToText } from './utils';
 import styles from './page.module.css';
 
+type Phase = 'work' | 'break';
+
 /**
  * ポモドーロタイマー（全画面表示）
  * @param todo - 対象タスク
@@ -28,9 +30,10 @@ export default function PomodoroTimer({
 }): React.ReactElement {
   const WORK_SECONDS: number = workMinutes * 60;
   const BREAK_SECONDS: number = breakMinutes * 60;
+  const [phase, setPhase] = useState<Phase>('work');
   const [secondsLeft, setSecondsLeft] = useState<number>(WORK_SECONDS);
   const [running, setRunning] = useState<boolean>(false);
-  const [totalElapsed, setTotalElapsed] = useState<number>(0);
+  const [workElapsed, setWorkElapsed] = useState<number>(0);
   const [overtime, setOvertime] = useState<boolean>(false);
   const [overtimeSeconds, setOvertimeSeconds] = useState<number>(0);
   const intervalRef = useRef<number | null>(null);
@@ -40,7 +43,9 @@ export default function PomodoroTimer({
   function playAlarmOnce(): void {
     try {
       const ctx: AudioContext = new AudioContext();
-      const frequencies: number[] = [523, 659, 784, 1047];
+      const frequencies: number[] = phase === 'work'
+        ? [523, 659, 784, 1047]
+        : [1047, 784, 659, 523];
       frequencies.forEach((freq: number, i: number) => {
         const osc: OscillatorNode = ctx.createOscillator();
         const gain: GainNode = ctx.createGain();
@@ -80,7 +85,10 @@ export default function PomodoroTimer({
   useEffect(() => {
     if (running) {
       intervalRef.current = window.setInterval(() => {
-        setTotalElapsed((prev) => prev + 1);
+        // 作業フェーズのみ実績カウント（超過中も含む）
+        if (phase === 'work') {
+          setWorkElapsed((prev) => prev + 1);
+        }
         if (overtime) {
           setOvertimeSeconds((prev) => prev + 1);
         } else {
@@ -102,7 +110,7 @@ export default function PomodoroTimer({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [running, overtime]);
+  }, [running, overtime, phase]);
 
   // コンポーネントアンマウント時にアラーム停止
   useEffect(() => {
@@ -111,21 +119,31 @@ export default function PomodoroTimer({
     };
   }, []);
 
-  /** アラームを止めて次のフェーズへ（または続行） */
-  function acknowledgeAlarm(): void {
+  /** 作業終了 → 休憩へ */
+  function goToBreak(): void {
     stopAlarmLoop();
     setOvertime(false);
     setOvertimeSeconds(0);
+    setPhase('break');
     setSecondsLeft(BREAK_SECONDS);
   }
 
-  /** 閉じるときに経過分を実績に加算 */
+  /** 休憩終了 → 作業へ */
+  function goToWork(): void {
+    stopAlarmLoop();
+    setOvertime(false);
+    setOvertimeSeconds(0);
+    setPhase('work');
+    setSecondsLeft(WORK_SECONDS);
+  }
+
+  /** 閉じるときに作業経過分を実績に加算（休憩は含まない） */
   function handleClose(): void {
     if (intervalRef.current) {
       window.clearInterval(intervalRef.current);
     }
     stopAlarmLoop();
-    const minutes: number = Math.round(totalElapsed / 60);
+    const minutes: number = Math.round(workElapsed / 60);
     if (minutes > 0) {
       onAddMinutes(minutes);
     }
@@ -137,11 +155,19 @@ export default function PomodoroTimer({
   const sec: number = displaySeconds % 60;
   const display: string = `${overtime ? '+' : ''}${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 
+  const phaseLabel: string = overtime
+    ? (phase === 'work' ? '⏰ 作業時間超過！' : '⏰ 休憩時間超過！')
+    : (phase === 'work' ? '作業中' : '☕ 休憩中');
+
+  const phaseColor: string = overtime
+    ? '#ef4444'
+    : (phase === 'work' ? '#3b82f6' : '#22c55e');
+
   return (
     <div className={styles.pomodoroOverlay}>
       <div className={styles.pomodoroContent}>
-        <div className={styles.pomodoroPhase} style={overtime ? { color: '#ef4444', animation: 'pulse 1s infinite' } : {}}>
-          {overtime ? '⏰ 時間超過！' : '作業中'}
+        <div className={styles.pomodoroPhase} style={overtime ? { color: '#ef4444', animation: 'pulse 1s infinite' } : { color: phaseColor }}>
+          {phaseLabel}
         </div>
         <h2 className={styles.pomodoroTitle}>{todo.title}</h2>
         <p className={styles.pomodoroInfo}>
@@ -150,9 +176,15 @@ export default function PomodoroTimer({
         <div className={styles.pomodoroTimer}>{display}</div>
         <div className={styles.pomodoroControls}>
           {overtime ? (
-            <button type="button" onClick={acknowledgeAlarm} className={styles.primaryBtn}>
-              🔕 アラーム停止 → 休憩へ
-            </button>
+            phase === 'work' ? (
+              <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
+                🔕 アラーム停止 → 休憩へ
+              </button>
+            ) : (
+              <button type="button" onClick={goToWork} className={styles.primaryBtn}>
+                🔕 アラーム停止 → 作業へ
+              </button>
+            )
           ) : !running ? (
             <button type="button" onClick={() => setRunning(true)} className={styles.primaryBtn}>
               スタート
@@ -167,7 +199,7 @@ export default function PomodoroTimer({
           </button>
         </div>
         <p className={styles.pomodoroElapsed}>
-          この作業で {Math.round(totalElapsed / 60)} 分経過
+          作業実績 {Math.round(workElapsed / 60)} 分
         </p>
       </div>
     </div>
