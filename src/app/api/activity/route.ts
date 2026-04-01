@@ -59,7 +59,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   {
     let query: string = `
       SELECT w.id, w.todo_id, COALESCE(t.title, a.title, '不明なタスク') as title, w.content, w.date, w.created_at,
-             COALESCE(t.category, a.category, '') as category
+             COALESCE(t.category, '') as category
       FROM work_logs w
       LEFT JOIN todos t ON w.todo_id = t.id
       LEFT JOIN archived_todos a ON w.todo_id = a.id
@@ -136,13 +136,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       });
     }
     // アーカイブから完了タスク（削除されても完了記録は残る）
-    let query2: string = 'SELECT id, title, category, archived_at FROM archived_todos WHERE user_id = ? AND done = 1';
+    let query2: string = 'SELECT id, title, archived_at FROM archived_todos WHERE user_id = ? AND done = 1';
     const params2: (string | number)[] = [userId];
     if (range) {
       query2 += ' AND archived_at BETWEEN ? AND ?';
       params2.push(range.start, range.end);
     }
-    const rows2 = await db.all<{ id: string; title: string; category: string; archived_at: number }>(query2, ...params2);
+    const rows2 = await db.all<{ id: string; title: string; archived_at: number }>(query2, ...params2);
     const existingIds: Set<string> = new Set(rows1.map((r) => r.id));
     for (const row of rows2) {
       if (!existingIds.has(row.id)) {
@@ -153,7 +153,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
           content: 'タスクを完了しました',
           date: tsToDate(row.archived_at),
           timestamp: row.archived_at,
-          category: row.category || '未分類',
+          category: '未分類',
         });
       }
     }
@@ -161,14 +161,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   // 4. 削除されたタスク
   {
-    let query: string = 'SELECT id, title, category, archived_at FROM archived_todos WHERE user_id = ?';
+    let query: string = 'SELECT id, title, archived_at FROM archived_todos WHERE user_id = ?';
     const queryParams: (string | number)[] = [userId];
     if (range) {
       query += ' AND archived_at BETWEEN ? AND ?';
       queryParams.push(range.start, range.end);
     }
     const rows = await db.all<{
-      id: string; title: string; category: string; archived_at: number;
+      id: string; title: string; archived_at: number;
     }>(query, ...queryParams);
     for (const row of rows) {
       entries.push({
@@ -178,7 +178,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         content: 'タスクを削除しました',
         date: tsToDate(row.archived_at),
         timestamp: row.archived_at,
-        category: row.category || '未分類',
+        category: '未分類',
       });
     }
   }
