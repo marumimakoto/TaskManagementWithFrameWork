@@ -3514,14 +3514,17 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
         function renderKanbanCard(t: Todo): React.ReactElement {
           const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
+          const isExpanded: boolean = expandedId === t.id;
           return (
             <div
               key={t.id}
               className={`${styles.kanbanCard} ${styles[bgClass]}`}
-              onClick={() => toggleExpand(t.id)}
-              style={{ cursor: 'pointer' }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {/* ヘッダー: クリックで展開/折りたたみ */}
+              <div
+                style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                onClick={() => toggleExpand(t.id)}
+              >
                 <input
                   type="checkbox"
                   checked={t.done}
@@ -3532,14 +3535,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <span style={{ fontWeight: 600, flex: 1, textDecoration: t.done ? 'line-through' : 'none', opacity: t.done ? 0.6 : 1 }}>
                   {t.title}
                 </span>
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
               </div>
               {t.deadline && (
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4, paddingLeft: 30 }}>
                   期限: {formatDeadline(t.deadline)}
                 </div>
               )}
-              {expandedId === t.id && (
-                <div onClick={(e) => e.stopPropagation()}>
+              {/* 展開コンテンツ: クリックはヘッダーに伝播しない */}
+              {isExpanded && (
+                <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--card-border)' }}>
                   {renderExpandedContent(t)}
                 </div>
               )}
