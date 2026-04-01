@@ -448,7 +448,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
         </div>}
 
         {/* カテゴリフィルター（一覧モード時のみ） */}
-        {viewMode === 'list' && entryCategories.length > 1 && (
+        {viewMode === 'list' && entryCategories.length > 0 && (
           <div className={styles.activityTypeFilterRow} style={{ marginTop: 4 }}>
             <button
               type="button"
