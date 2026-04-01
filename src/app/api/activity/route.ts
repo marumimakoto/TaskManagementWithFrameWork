@@ -109,18 +109,17 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // 3. 完了したタスク
+  // 3. 完了したタスク（todosとarchived_todosの両方から取得）
   {
-    let query: string = 'SELECT id, title, last_worked_at FROM todos WHERE user_id = ? AND done = 1 AND last_worked_at IS NOT NULL';
-    const queryParams: (string | number)[] = [userId];
+    // 現在のtodosから完了タスク
+    let query1: string = 'SELECT id, title, last_worked_at FROM todos WHERE user_id = ? AND done = 1 AND last_worked_at IS NOT NULL';
+    const params1: (string | number)[] = [userId];
     if (range) {
-      query += ' AND last_worked_at BETWEEN ? AND ?';
-      queryParams.push(range.start, range.end);
+      query1 += ' AND last_worked_at BETWEEN ? AND ?';
+      params1.push(range.start, range.end);
     }
-    const rows = await db.all<{
-      id: string; title: string; last_worked_at: number;
-    }>(query, ...queryParams);
-    for (const row of rows) {
+    const rows1 = await db.all<{ id: string; title: string; last_worked_at: number }>(query1, ...params1);
+    for (const row of rows1) {
       entries.push({
         id: 'cp-' + row.id,
         type: 'completed',
@@ -129,6 +128,27 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         date: tsToDate(row.last_worked_at),
         timestamp: row.last_worked_at,
       });
+    }
+    // アーカイブから完了タスク（削除されても完了記録は残る）
+    let query2: string = 'SELECT id, title, archived_at FROM archived_todos WHERE user_id = ? AND done = 1';
+    const params2: (string | number)[] = [userId];
+    if (range) {
+      query2 += ' AND archived_at BETWEEN ? AND ?';
+      params2.push(range.start, range.end);
+    }
+    const rows2 = await db.all<{ id: string; title: string; archived_at: number }>(query2, ...params2);
+    const existingIds: Set<string> = new Set(rows1.map((r) => r.id));
+    for (const row of rows2) {
+      if (!existingIds.has(row.id)) {
+        entries.push({
+          id: 'cp-arch-' + row.id,
+          type: 'completed',
+          title: row.title,
+          content: 'タスクを完了しました',
+          date: tsToDate(row.archived_at),
+          timestamp: row.archived_at,
+        });
+      }
     }
   }
 

@@ -53,7 +53,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const [toDate, setToDate] = useState<string>('');
   const [viewMode, setViewMode] = useState<'list' | 'stats' | 'chart' | 'pareto'>('list');
   const chartCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'created', 'completed', 'deleted']));
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'created', 'completed']));
   const [currentPage, setCurrentPage] = useState<number>(1);
   const PAGE_SIZE: number = 20;
 

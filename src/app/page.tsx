@@ -3302,15 +3302,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 <button onClick={() => addLog(t.id)} className={styles.iconBtn} disabled={t.done} title="実績を加算">
                   +
                 </button>
-                {t.parentId && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); changeParent(t.id, null); }}
-                    className={styles.iconBtn}
-                    title="ルートに戻す"
-                  >
-                    ↑
-                  </button>
-                )}
                 <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
               </div>
 

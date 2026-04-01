@@ -2721,9 +2721,10 @@
 
   .taskTitle {
     font-size: 14px !important;
-    white-space: nowrap !important;
-    overflow: hidden !important;
-    text-overflow: ellipsis !important;
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    word-break: break-word;
     padding: 0 !important;
   }
 

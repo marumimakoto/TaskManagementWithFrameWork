@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
 import { log, uid } from './utils';
+import { useIsMobile } from './useIsMobile';
 import styles from './page.module.css';
 import { DragHandle, MoveButtonBar, InlineEditText, InlineEditTextarea, DeleteButton } from './SharedComponents';
 
@@ -49,6 +50,7 @@ export default function TaskSetPanel({
   categories?: { id: string; name: string }[];
   onApply: (items: { title: string; estMin: number; detail?: string; recurrence: string; deadline?: string }[]) => void;
 }): React.ReactElement {
+  const isMobile: boolean = useIsMobile();
   const [sets, setSets] = useState<TaskSet[]>([]);
   const [publicSets, setPublicSets] = useState<PublicTaskSet[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -544,10 +546,17 @@ export default function TaskSetPanel({
                     {set.name}
                   </span>
                 )}
-                <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>
-                  ({set.items.length}件 / 合計{set.items.reduce((sum: number, item: { estMin: number }) => sum + (item.estMin || 0), 0)}分)
-                </span>
+                {!isMobile && (
+                  <span style={{ marginLeft: 8, fontSize: 12, color: 'var(--muted)', fontWeight: 400 }}>
+                    ({set.items.length}件 / 合計{set.items.reduce((sum: number, item: { estMin: number }) => sum + (item.estMin || 0), 0)}分)
+                  </span>
+                )}
               </span>
+              {isMobile && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {set.items.length}件 / 合計{set.items.reduce((sum: number, item: { estMin: number }) => sum + (item.estMin || 0), 0)}分
+                </div>
+              )}
               <div className={styles.diaryActions} onClick={(e) => e.stopPropagation()}>
                 <button
                   type="button"
@@ -557,15 +566,17 @@ export default function TaskSetPanel({
                 >
                   タスクに追加
                 </button>
-                <button
-                  type="button"
-                  onClick={() => exportSet(set)}
-                  className={styles.iconBtn}
-                  style={{ fontSize: 12 }}
-                  title="JSONエクスポート"
-                >
-                  エクスポート
-                </button>
+                {!isMobile && (
+                  <button
+                    type="button"
+                    onClick={() => exportSet(set)}
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12 }}
+                    title="JSONエクスポート"
+                  >
+                    エクスポート
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => togglePublic(set.id, !!set.isPublic)}
