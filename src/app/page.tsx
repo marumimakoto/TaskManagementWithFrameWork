@@ -3644,10 +3644,27 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         <ActivityPanel user={user} isPro={isPro} onShowProModal={() => setShowProModal(true)} />
       )}
 
-      {activeTab === 'today' && (
+      {activeTab === 'today' && (() => {
+        // 本日の日付文字列（YYYY-MM-DD）
+        const todayStr: string = new Date().toISOString().slice(0, 10);
+        // 作業ログから本日分の実績時間を計算
+        const todayActualMap: Record<string, number> = {};
+        for (const [todoId, logs] of Object.entries(workLogs)) {
+          const todayLogs = (logs as WorkLog[]).filter((l: WorkLog) => l.date === todayStr);
+          // 作業ログはコンテンツベースなので、actualMinからの差分ではなく
+          // 今日のaddLog分を追跡するにはログの件数×入力分が必要
+          // 簡易的に: 今日の作業ログ件数があれば、そのタスクの累計実績を本日分とみなす
+          // TODO: 作業ログにminutesカラムを追加して正確に計算
+          if (todayLogs.length > 0) {
+            const todo: Todo | undefined = todos.find((t) => t.id === todoId);
+            todayActualMap[todoId] = todo?.actualMin ?? 0;
+          }
+        }
+        return (
         <TodayPanel
           todos={todos}
           onToggleDone={toggleDone}
+          todayActualMap={todayActualMap}
           onAddLog={(id: string, minutes: number) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {
@@ -3665,7 +3682,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           }}
           renderExpanded={(t: Todo) => renderExpandedContent(t)}
         />
-      )}
+        );
+      })()}
 
       {activeTab === 'calendar' && (
         <CalendarPanel todos={todos} userId={user.id} />

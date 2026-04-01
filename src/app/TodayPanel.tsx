@@ -14,11 +14,13 @@ export default function TodayPanel({
   todos,
   onToggleDone,
   onAddLog,
+  todayActualMap = {},
   renderExpanded,
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
+  todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -35,7 +37,8 @@ export default function TodayPanel({
 
   const totalEst: number = selectedTodos.reduce((sum, t) => sum + t.estMin, 0);
   const totalActual: number = selectedTodos.reduce((sum, t) => sum + t.actualMin, 0);
-  const remaining: number = Math.max(0, totalEst - totalActual);
+  const todayActual: number = selectedTodos.reduce((sum, t) => sum + (todayActualMap[t.id] ?? 0), 0);
+  const remaining: number = Math.max(0, totalEst - todayActual);
 
   function toggleSelect(id: string): void {
     setSelectedIds((prev) => {
@@ -151,24 +154,28 @@ export default function TodayPanel({
       {/* 合計サマリー */}
       <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>今日やること ({selectedTodos.length}件)</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>予定合計</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalEst)}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalEst)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>実績合計</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#22c55e' }}>{minutesToText(totalActual)}</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>本日実績</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#22c55e' }}>{minutesToText(todayActual)}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)' }}>累計実績</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#6b7280' }}>{minutesToText(totalActual)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>残り</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: remaining > 0 ? '#ef4444' : '#22c55e' }}>{minutesToText(remaining)}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: remaining > 0 ? '#ef4444' : '#22c55e' }}>{minutesToText(remaining)}</div>
           </div>
         </div>
         {totalEst > 0 && (
           <div style={{ marginTop: 8 }}>
             <div style={{ width: '100%', height: 6, background: 'var(--input-border)', borderRadius: 3 }}>
-              <div style={{ width: `${Math.min(100, (totalActual / totalEst) * 100)}%`, height: '100%', background: '#3b82f6', borderRadius: 3, transition: 'width 0.3s ease' }} />
+              <div style={{ width: `${Math.min(100, (todayActual / totalEst) * 100)}%`, height: '100%', background: '#3b82f6', borderRadius: 3, transition: 'width 0.3s ease' }} />
             </div>
           </div>
         )}

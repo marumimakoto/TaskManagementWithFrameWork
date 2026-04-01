@@ -61,8 +61,22 @@ function recurrenceLabel(rec: string): string {
  * 繰り返しタスク一覧・編集ページ
  */
 export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onRefresh: () => void }): React.ReactElement {
-  const [items, setItems] = useState<RecurringTodo[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [items, setItems] = useState<RecurringTodo[]>(() => {
+    try {
+      const cached: string | null = localStorage.getItem('kiroku:recurring:' + user.id);
+      if (cached) {
+        return JSON.parse(cached) as RecurringTodo[];
+      }
+    } catch { /* ignore */ }
+    return [];
+  });
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      return !localStorage.getItem('kiroku:recurring:' + user.id);
+    } catch {
+      return true;
+    }
+  });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editRecurrence, setEditRecurrence] = useState<string>('daily');
   const [message, setMessage] = useState<string>('');
@@ -74,6 +88,7 @@ export default function RecurringPanel({ user, onRefresh }: { user: AppUser; onR
       const res: Response = await fetch('/api/todos/recurring?userId=' + user.id);
       const data: RecurringTodo[] = await res.json();
       setItems(data);
+      try { localStorage.setItem('kiroku:recurring:' + user.id, JSON.stringify(data)); } catch { /* ignore */ }
     } catch (e) {
       console.error('Failed to fetch recurring todos', e);
     } finally {

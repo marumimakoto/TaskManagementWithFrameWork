@@ -825,6 +825,10 @@
 
 .cardLeft {
   min-width: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  align-items: flex-start;
 }
 
 .taskTitleRow {
@@ -2668,12 +2672,29 @@
     overflow: hidden;
   }
 
+  .cardLeft {
+    flex-direction: column;
+    gap: 2px;
+  }
+
   .taskTitle {
     font-size: 16px !important;
     white-space: normal;
     overflow: visible;
     text-overflow: unset;
     word-break: break-word;
+  }
+
+  .taskProgress {
+    font-size: 13px !important;
+  }
+
+  .card {
+    padding: 6px 8px !important;
+  }
+
+  .actions {
+    gap: 4px;
   }
 
   .taskDeadlineBig {

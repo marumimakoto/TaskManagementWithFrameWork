@@ -103,51 +103,91 @@ export default function CalendarPanel({ todos, userId, recurringRules: propRules
       }
     }
 
-    // 繰り返しルールから1ヶ月先までの将来期限を計算
+    // 繰り返しルールから今月・来月の該当日を計算してカレンダーに表示
     if (recurringRules.length > 0) {
-      const now: Date = new Date();
-      const oneMonthLater: Date = new Date();
-      oneMonthLater.setMonth(oneMonthLater.getMonth() + 1);
+      const today: Date = new Date();
+      today.setHours(0, 0, 0, 0);
+      // 今月1日から来月末日まで
+      const rangeStart: Date = new Date(currentYear, currentMonth, 1);
+      const rangeEnd: Date = new Date(currentYear, currentMonth + 2, 0);
 
       for (const rule of recurringRules) {
-        if (rule.deadlineOffsetDays === null || rule.deadlineOffsetDays === undefined) {
-          continue;
-        }
-        // 既にtodosに同タイトルの未完了タスクがあればスキップ（重複防止）
-        const existingTodo: Todo | undefined = todos.find((t) => t.title === rule.title && !t.done);
-        if (existingTodo && existingTodo.deadline) {
-          continue;
-        }
-        // 今日からoffset日後の期限を計算
-        const futureDate: Date = new Date();
-        futureDate.setDate(futureDate.getDate() + rule.deadlineOffsetDays);
-        if (futureDate > oneMonthLater) {
-          continue;
-        }
-        const futureTodo: Todo = {
-          id: 'recurring-' + rule.id,
-          title: '🔁 ' + rule.title,
-          estMin: rule.estMin,
-          actualMin: 0,
-          stuckHours: 0,
-          recurrence: rule.recurrence,
-          started: false,
-          done: false,
-          sortOrder: 0,
-          deadline: futureDate.getTime(),
-        };
-        const key: string = toDateKey(futureTodo.deadline!);
-        const existing: Todo[] | undefined = map.get(key);
-        if (existing !== undefined) {
-          existing.push(futureTodo);
-        } else {
-          map.set(key, [futureTodo]);
+        const offset: number = rule.deadlineOffsetDays ?? 0;
+        const rec: string = rule.recurrence;
+        const DAY_NAMES: string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+
+        // rangeStart〜rangeEndの各日をチェック
+        const current: Date = new Date(rangeStart);
+        while (current <= rangeEnd) {
+          let matches: boolean = false;
+          const dayOfWeek: number = current.getDay();
+          const dayOfMonth: number = current.getDate();
+
+          if (rec === 'daily' || rec === 'day') {
+            matches = true;
+          } else if (rec.startsWith('custom:')) {
+            const parts: string[] = rec.split(':');
+            const unit: string = parts[2] ?? 'day';
+            if (unit === 'day') {
+              matches = true;
+            } else if (unit === 'week') {
+              const weekDays: string[] = (parts[3] ?? 'mon').split(',');
+              matches = weekDays.includes(DAY_NAMES[dayOfWeek]);
+            } else if (unit === 'month') {
+              const monthMode: string = parts[3] ?? 'date';
+              if (monthMode === 'date') {
+                const targetDay: number = parseInt(parts[4] ?? '1', 10);
+                matches = dayOfMonth === targetDay;
+              } else if (monthMode === 'weekday') {
+                const nth: number = parseInt(parts[4] ?? '1', 10);
+                const targetDayName: string = parts[5] ?? 'mon';
+                matches = DAY_NAMES[dayOfWeek] === targetDayName && Math.ceil(dayOfMonth / 7) === nth;
+              }
+            }
+          } else if (rec === 'weekly' || rec.startsWith('week:')) {
+            matches = dayOfWeek === 1; // デフォルト月曜
+          } else if (rec === 'monthly') {
+            matches = dayOfMonth === 1;
+          }
+
+          if (matches && current >= today) {
+            const deadlineDate: Date = new Date(current);
+            deadlineDate.setDate(deadlineDate.getDate() + offset);
+            deadlineDate.setHours(23, 59, 59, 999);
+            const dateKey: string = toDateKey(deadlineDate.getTime());
+            // 既にtodosに同タイトル・同日の期限があればスキップ
+            const existingInMap: Todo[] | undefined = map.get(dateKey);
+            const alreadyExists: boolean = existingInMap
+              ? existingInMap.some((t) => t.title === rule.title || t.title === '🔁 ' + rule.title)
+              : false;
+            if (!alreadyExists) {
+              const futureTodo: Todo = {
+                id: 'recurring-' + rule.id + '-' + dateKey,
+                title: '🔁 ' + rule.title,
+                estMin: rule.estMin,
+                actualMin: 0,
+                stuckHours: 0,
+                recurrence: rule.recurrence,
+                started: false,
+                done: false,
+                sortOrder: 0,
+                deadline: deadlineDate.getTime(),
+              };
+              const existing: Todo[] | undefined = map.get(dateKey);
+              if (existing !== undefined) {
+                existing.push(futureTodo);
+              } else {
+                map.set(dateKey, [futureTodo]);
+              }
+            }
+          }
+          current.setDate(current.getDate() + 1);
         }
       }
     }
 
     return map;
-  }, [todos, recurringRules]);
+  }, [todos, recurringRules, currentYear, currentMonth]);
 
   /** 前月に移動する */
   function goToPreviousMonth(): void {
