@@ -6,12 +6,14 @@ import { minutesToText } from './utils';
 import styles from './page.module.css';
 
 type Phase = 'work' | 'break';
+type TimerMode = 'pomodoro' | 'timer';
 
 const STORAGE_KEY: string = 'kiroku:pomodoro';
 
 /** localStorage に保存するタイマー状態 */
 interface PomodoroState {
   todoId: string;
+  timerMode: TimerMode;
   phase: Phase;
   running: boolean;
   /** フェーズ開始時のタイムスタンプ（ms） */
@@ -80,6 +82,8 @@ export default function PomodoroTimer({
   // localStorageから復元、なければ初期状態
   const restored: PomodoroState | null = loadState(todo.id);
 
+  const [timerMode, setTimerMode] = useState<TimerMode>(restored?.timerMode ?? 'pomodoro');
+  const [timerInputMin, setTimerInputMin] = useState<string>('30');
   const [phase, setPhase] = useState<Phase>(restored?.phase ?? 'work');
   const [running, setRunning] = useState<boolean>(restored?.running ?? false);
   const [workElapsed, setWorkElapsed] = useState<number>(restored?.workElapsed ?? 0);
@@ -213,6 +217,7 @@ export default function PomodoroTimer({
   function persistState(overrides?: Partial<PomodoroState>): void {
     const state: PomodoroState = {
       todoId: todo.id,
+      timerMode,
       phase,
       running,
       phaseStartedAt: phaseStartedAtRef.current,
@@ -413,17 +418,75 @@ export default function PomodoroTimer({
   const sec: number = displaySeconds % 60;
   const display: string = `${overtime ? '+' : ''}${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 
-  const phaseLabel: string = overtime
-    ? (phase === 'work' ? '⏰ 作業時間超過！' : '⏰ 休憩時間超過！')
-    : (phase === 'work' ? '作業中' : '☕ 休憩中');
+  const phaseLabel: string = timerMode === 'timer'
+    ? (overtime ? '⏰ 時間超過！' : '⏱ タイマー')
+    : (overtime
+      ? (phase === 'work' ? '⏰ 作業時間超過！' : '⏰ 休憩時間超過！')
+      : (phase === 'work' ? '作業中' : '☕ 休憩中'));
 
   const phaseColor: string = overtime
     ? '#ef4444'
-    : (phase === 'work' ? '#3b82f6' : '#22c55e');
+    : (timerMode === 'timer' ? '#f59e0b' : (phase === 'work' ? '#3b82f6' : '#22c55e'));
+
+  /** タイマーモード: 指定分数でスタート */
+  function handleTimerStart(): void {
+    const mins: number = Math.max(1, parseInt(timerInputMin, 10) || 30);
+    const secs: number = mins * 60;
+    const now: number = Date.now();
+    phaseStartedAtRef.current = now;
+    phaseSecondsAtStartRef.current = secs;
+    pausedConsumedRef.current = workElapsed;
+    setSecondsLeft(secs);
+    setRunning(true);
+    setPhase('work');
+    scheduleNotification(secs * 1000, 'work');
+    persistState({
+      timerMode: 'timer',
+      running: true,
+      phase: 'work',
+      phaseStartedAt: now,
+      phaseSecondsAtStart: secs,
+      pausedConsumed: workElapsed,
+    });
+  }
+
+  const isNotStarted: boolean = !running && phaseStartedAtRef.current === 0;
 
   return (
     <div className={styles.pomodoroOverlay}>
       <div className={styles.pomodoroContent}>
+        {/* モード切替（未開始時のみ） */}
+        {isNotStarted && (
+          <div style={{ display: 'flex', gap: 0, marginBottom: 16, justifyContent: 'center' }}>
+            <button
+              type="button"
+              onClick={() => { setTimerMode('pomodoro'); setSecondsLeft(WORK_SECONDS); }}
+              style={{
+                padding: '8px 20px', borderRadius: '8px 0 0 8px', fontSize: 14, cursor: 'pointer',
+                border: '1px solid var(--card-border)',
+                background: timerMode === 'pomodoro' ? '#3b82f6' : 'var(--card-bg)',
+                color: timerMode === 'pomodoro' ? 'white' : 'var(--foreground)',
+                fontWeight: 600,
+              }}
+            >
+              🍅 ポモドーロ
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTimerMode('timer'); setSecondsLeft(parseInt(timerInputMin, 10) * 60 || 1800); }}
+              style={{
+                padding: '8px 20px', borderRadius: '0 8px 8px 0', fontSize: 14, cursor: 'pointer',
+                border: '1px solid var(--card-border)', borderLeft: 'none',
+                background: timerMode === 'timer' ? '#f59e0b' : 'var(--card-bg)',
+                color: timerMode === 'timer' ? 'white' : 'var(--foreground)',
+                fontWeight: 600,
+              }}
+            >
+              ⏱ タイマー
+            </button>
+          </div>
+        )}
+
         <div className={styles.pomodoroPhase} style={overtime ? { color: '#ef4444', animation: 'pulse 1s infinite' } : { color: phaseColor }}>
           {phaseLabel}
         </div>
@@ -431,20 +494,50 @@ export default function PomodoroTimer({
         <p className={styles.pomodoroInfo}>
           予定 {minutesToText(todo.estMin)} / 実績 {minutesToText(todo.actualMin)}
         </p>
+
+        {/* タイマーモード: 未開始時に分数入力 */}
+        {timerMode === 'timer' && isNotStarted && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+            <input
+              type="number"
+              min="1"
+              max="999"
+              value={timerInputMin}
+              onChange={(e) => {
+                setTimerInputMin(e.target.value);
+                const mins: number = parseInt(e.target.value, 10) || 30;
+                setSecondsLeft(mins * 60);
+              }}
+              style={{ width: 70, fontSize: 20, textAlign: 'center', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--card-border)' }}
+            />
+            <span style={{ fontSize: 16, color: 'var(--muted)' }}>分</span>
+          </div>
+        )}
+
         <div className={styles.pomodoroTimer}>{display}</div>
         <div className={styles.pomodoroControls}>
           {overtime ? (
-            phase === 'work' ? (
-              <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
-                🔕 アラーム停止 → 休憩へ
-              </button>
+            timerMode === 'pomodoro' ? (
+              phase === 'work' ? (
+                <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
+                  🔕 アラーム停止 → 休憩へ
+                </button>
+              ) : (
+                <button type="button" onClick={goToWork} className={styles.primaryBtn}>
+                  🔕 アラーム停止 → 作業へ
+                </button>
+              )
             ) : (
-              <button type="button" onClick={goToWork} className={styles.primaryBtn}>
-                🔕 アラーム停止 → 作業へ
+              <button type="button" onClick={() => { stopAlarmLoop(); cancelNotification(); setOvertime(false); }} className={styles.primaryBtn}>
+                🔕 アラーム停止
               </button>
             )
           ) : !running ? (
-            <button type="button" onClick={handleStart} className={styles.primaryBtn}>
+            <button
+              type="button"
+              onClick={timerMode === 'timer' && isNotStarted ? handleTimerStart : handleStart}
+              className={styles.primaryBtn}
+            >
               {phaseStartedAtRef.current > 0 ? '再開' : 'スタート'}
             </button>
           ) : (
