@@ -119,6 +119,14 @@ export default function PomodoroTimer({
 
   const intervalRef = useRef<number | null>(null);
   const alarmIntervalRef = useRef<number | null>(null);
+  const notifyTimeoutRef = useRef<number | null>(null);
+
+  // 初回マウント時にNotification許可をリクエスト
+  useEffect(() => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  }, []);
 
   /** Web Audio APIでアラーム音を1回鳴らす */
   function playAlarmOnce(): void {
@@ -158,6 +166,46 @@ export default function PomodoroTimer({
     if (alarmIntervalRef.current) {
       window.clearInterval(alarmIntervalRef.current);
       alarmIntervalRef.current = null;
+    }
+  }
+
+  /** ブラウザ通知を送る（バックグラウンドでも表示される） */
+  function sendNotification(title: string, body: string): void {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const notification: Notification = new Notification(title, {
+        body,
+        icon: '/next.svg',
+        tag: 'kiroku-pomodoro',
+        requireInteraction: true,
+      });
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+    }
+  }
+
+  /** フェーズ終了時刻にsetTimeoutで通知を予約する */
+  function scheduleNotification(remainingMs: number, phaseType: Phase): void {
+    cancelNotification();
+    if (remainingMs <= 0) {
+      return;
+    }
+    notifyTimeoutRef.current = window.setTimeout(() => {
+      const msg: string = phaseType === 'work'
+        ? '作業時間が終了しました。休憩に入りましょう。'
+        : '休憩時間が終了しました。作業を再開しましょう。';
+      sendNotification('Kiroku ポモドーロ', msg);
+      // フォアグラウンドに戻った時のためにアラームも開始
+      startAlarmLoop();
+    }, remainingMs);
+  }
+
+  /** 予約済みの通知をキャンセルする */
+  function cancelNotification(): void {
+    if (notifyTimeoutRef.current) {
+      window.clearTimeout(notifyTimeoutRef.current);
+      notifyTimeoutRef.current = null;
     }
   }
 
@@ -224,14 +272,22 @@ export default function PomodoroTimer({
     return () => window.clearInterval(id);
   }, [running, phase]);
 
-  // コンポーネントアンマウント時にアラーム停止
+  // 復元時の初期化 + アンマウント時のクリーンアップ
   useEffect(() => {
-    // 復元時に既にオーバータイムならアラーム開始
     if (running && overtime) {
+      // 復元時に既にオーバータイムならアラーム開始
       startAlarmLoop();
+    } else if (running && !overtime) {
+      // 復元時にまだ時間が残っていれば通知を予約
+      const remainingMs: number = (phaseSecondsAtStartRef.current * 1000)
+        - (Date.now() - phaseStartedAtRef.current);
+      if (remainingMs > 0) {
+        scheduleNotification(remainingMs, phase);
+      }
     }
     return () => {
       stopAlarmLoop();
+      cancelNotification();
     };
   }, []);
 
@@ -242,6 +298,7 @@ export default function PomodoroTimer({
     phaseSecondsAtStartRef.current = secondsLeft;
     pausedConsumedRef.current = workElapsed;
     setRunning(true);
+    scheduleNotification(secondsLeft * 1000, phase);
     persistState({
       running: true,
       phaseStartedAt: now,
@@ -268,6 +325,7 @@ export default function PomodoroTimer({
 
     setRunning(false);
     stopAlarmLoop();
+    cancelNotification();
     persistState({
       running: false,
       phaseSecondsAtStart: remaining,
@@ -279,6 +337,7 @@ export default function PomodoroTimer({
   /** 作業終了 → 休憩へ */
   function goToBreak(): void {
     stopAlarmLoop();
+    cancelNotification();
     setOvertime(false);
     setOvertimeSeconds(0);
     setPhase('break');
@@ -293,6 +352,7 @@ export default function PomodoroTimer({
 
     phaseStartedAtRef.current = now;
     phaseSecondsAtStartRef.current = BREAK_SECONDS;
+    scheduleNotification(BREAK_SECONDS * 1000, 'break');
 
     persistState({
       phase: 'break',
@@ -306,6 +366,7 @@ export default function PomodoroTimer({
   /** 休憩終了 → 作業へ */
   function goToWork(): void {
     stopAlarmLoop();
+    cancelNotification();
     setOvertime(false);
     setOvertimeSeconds(0);
     setPhase('work');
@@ -314,7 +375,7 @@ export default function PomodoroTimer({
     const now: number = Date.now();
     phaseStartedAtRef.current = now;
     phaseSecondsAtStartRef.current = WORK_SECONDS;
-    // pausedConsumedRefはそのまま（作業の累計を引き継ぐ）
+    scheduleNotification(WORK_SECONDS * 1000, 'work');
 
     persistState({
       phase: 'work',
@@ -329,6 +390,7 @@ export default function PomodoroTimer({
       window.clearInterval(intervalRef.current);
     }
     stopAlarmLoop();
+    cancelNotification();
 
     // 最終的なworkElapsedを計算
     let finalWorkElapsed: number = workElapsed;
