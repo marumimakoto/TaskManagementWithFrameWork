@@ -721,6 +721,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [dragId, setDragId] = useState<string | null>(null);
   const isDraggingRef = useRef<boolean>(false);
   const [pomodoroTodo, setPomodoroTodo] = useState<Todo | null>(null);
+
+  // ポモドーロタイマーのlocalStorage復元
+  useEffect(() => {
+    try {
+      const raw: string | null = localStorage.getItem('kiroku:pomodoro');
+      if (raw) {
+        const state: { todoId: string } = JSON.parse(raw) as { todoId: string };
+        const target: Todo | undefined = todos.find((t) => t.id === state.todoId);
+        if (target && !pomodoroTodo) {
+          setPomodoroTodo(target);
+        }
+      }
+    } catch { /* ignore */ }
+  }, [todos]);
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dragOverMode, setDragOverMode] = useState<'child' | 'between' | null>(null);
   const [dropBetweenIndex, setDropBetweenIndex] = useState<number | null>(null);

@@ -7,13 +7,59 @@ import styles from './page.module.css';
 
 type Phase = 'work' | 'break';
 
+const STORAGE_KEY: string = 'kiroku:pomodoro';
+
+/** localStorage に保存するタイマー状態 */
+interface PomodoroState {
+  todoId: string;
+  phase: Phase;
+  running: boolean;
+  /** フェーズ開始時のタイムスタンプ（ms） */
+  phaseStartedAt: number;
+  /** フェーズ開始時点での残り秒数 */
+  phaseSecondsAtStart: number;
+  /** 作業フェーズの累計経過秒数（休憩は含まない） */
+  workElapsed: number;
+  /** 一時停止中に消費済みの秒数 */
+  pausedConsumed: number;
+  workSeconds: number;
+  breakSeconds: number;
+}
+
+/** 保存された状態を読み込む */
+function loadState(todoId: string): PomodoroState | null {
+  try {
+    const raw: string | null = localStorage.getItem(STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    const state: PomodoroState = JSON.parse(raw) as PomodoroState;
+    if (state.todoId !== todoId) {
+      return null;
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+/** 状態を保存する */
+function saveState(state: PomodoroState): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch { /* ignore */ }
+}
+
+/** 状態を削除する */
+function clearState(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch { /* ignore */ }
+}
+
 /**
  * ポモドーロタイマー（全画面表示）
- * @param todo - 対象タスク
- * @param onClose - 閉じるコールバック
- * @param onAddMinutes - 実績追加コールバック（分）
- * @param workMinutes - 作業時間（分）デフォルト25
- * @param breakMinutes - 休憩時間（分）デフォルト5
+ * 開始時刻ベースで計算するため、バックグラウンドやタブ閉じにも対応
  */
 export default function PomodoroTimer({
   todo,
@@ -30,12 +76,47 @@ export default function PomodoroTimer({
 }): React.ReactElement {
   const WORK_SECONDS: number = workMinutes * 60;
   const BREAK_SECONDS: number = breakMinutes * 60;
-  const [phase, setPhase] = useState<Phase>('work');
-  const [secondsLeft, setSecondsLeft] = useState<number>(WORK_SECONDS);
-  const [running, setRunning] = useState<boolean>(false);
-  const [workElapsed, setWorkElapsed] = useState<number>(0);
-  const [overtime, setOvertime] = useState<boolean>(false);
-  const [overtimeSeconds, setOvertimeSeconds] = useState<number>(0);
+
+  // localStorageから復元、なければ初期状態
+  const restored: PomodoroState | null = loadState(todo.id);
+
+  const [phase, setPhase] = useState<Phase>(restored?.phase ?? 'work');
+  const [running, setRunning] = useState<boolean>(restored?.running ?? false);
+  const [workElapsed, setWorkElapsed] = useState<number>(restored?.workElapsed ?? 0);
+
+  // 開始時刻ベースの状態
+  const phaseStartedAtRef = useRef<number>(restored?.phaseStartedAt ?? 0);
+  const phaseSecondsAtStartRef = useRef<number>(
+    restored?.phaseSecondsAtStart ?? WORK_SECONDS
+  );
+  const pausedConsumedRef = useRef<number>(restored?.pausedConsumed ?? 0);
+
+  const [secondsLeft, setSecondsLeft] = useState<number>(() => {
+    if (!restored || !restored.running) {
+      return restored?.phaseSecondsAtStart ?? WORK_SECONDS;
+    }
+    // 実時間で残り秒数を計算
+    const elapsed: number = Math.floor((Date.now() - restored.phaseStartedAt) / 1000);
+    return Math.max(0, restored.phaseSecondsAtStart - elapsed);
+  });
+
+  const [overtime, setOvertime] = useState<boolean>(() => {
+    if (!restored || !restored.running) {
+      return false;
+    }
+    const elapsed: number = Math.floor((Date.now() - restored.phaseStartedAt) / 1000);
+    return elapsed >= restored.phaseSecondsAtStart;
+  });
+
+  const [overtimeSeconds, setOvertimeSeconds] = useState<number>(() => {
+    if (!restored || !restored.running) {
+      return 0;
+    }
+    const elapsed: number = Math.floor((Date.now() - restored.phaseStartedAt) / 1000);
+    const over: number = elapsed - restored.phaseSecondsAtStart;
+    return over > 0 ? over : 0;
+  });
+
   const intervalRef = useRef<number | null>(null);
   const alarmIntervalRef = useRef<number | null>(null);
 
@@ -58,9 +139,7 @@ export default function PomodoroTimer({
         osc.start(ctx.currentTime + i * 0.2);
         osc.stop(ctx.currentTime + i * 0.2 + 0.4);
       });
-    } catch {
-      // AudioContextが使えない環境では無視
-    }
+    } catch { /* ignore */ }
   }
 
   /** アラームを繰り返し鳴らす（2秒間隔） */
@@ -82,27 +161,45 @@ export default function PomodoroTimer({
     }
   }
 
+  /** 現在の状態をlocalStorageに保存する */
+  function persistState(overrides?: Partial<PomodoroState>): void {
+    const state: PomodoroState = {
+      todoId: todo.id,
+      phase,
+      running,
+      phaseStartedAt: phaseStartedAtRef.current,
+      phaseSecondsAtStart: phaseSecondsAtStartRef.current,
+      workElapsed,
+      pausedConsumed: pausedConsumedRef.current,
+      workSeconds: WORK_SECONDS,
+      breakSeconds: BREAK_SECONDS,
+      ...overrides,
+    };
+    saveState(state);
+  }
+
+  // メインのtickループ: 実時間ベースで毎秒更新
   useEffect(() => {
     if (running) {
       intervalRef.current = window.setInterval(() => {
-        // 作業フェーズのみ実績カウント（超過中も含む）
-        if (phase === 'work') {
-          setWorkElapsed((prev) => prev + 1);
-        }
-        if (overtime) {
-          setOvertimeSeconds((prev) => prev + 1);
+        const now: number = Date.now();
+        const totalElapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
+        const remaining: number = phaseSecondsAtStartRef.current - totalElapsed;
+
+        if (remaining <= 0) {
+          // 超過モード
+          setSecondsLeft(0);
+          setOvertime(true);
+          setOvertimeSeconds(Math.abs(remaining));
+          startAlarmLoop();
         } else {
-          setSecondsLeft((prev) => {
-            if (prev <= 1) {
-              // 時間終了 → 超過モードに移行、アラーム開始
-              setOvertime(true);
-              setOvertimeSeconds(0);
-              startAlarmLoop();
-              return 0;
-            }
-            return prev - 1;
-          });
+          setSecondsLeft(remaining);
+          setOvertime(false);
+          setOvertimeSeconds(0);
         }
+
+        // 作業フェーズの場合、workElapsedを実時間で更新
+        // workElapsed = 復元時の値 + 今のフェーズが作業なら経過秒数
       }, 1000);
     }
     return () => {
@@ -110,14 +207,74 @@ export default function PomodoroTimer({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [running, overtime, phase]);
+  }, [running]);
+
+  // workElapsedを実時間で計算するuseEffect
+  useEffect(() => {
+    if (!running) {
+      return;
+    }
+    const id: number = window.setInterval(() => {
+      if (phase === 'work') {
+        const now: number = Date.now();
+        const thisPhaseElapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
+        setWorkElapsed(pausedConsumedRef.current + thisPhaseElapsed);
+      }
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [running, phase]);
 
   // コンポーネントアンマウント時にアラーム停止
   useEffect(() => {
+    // 復元時に既にオーバータイムならアラーム開始
+    if (running && overtime) {
+      startAlarmLoop();
+    }
     return () => {
       stopAlarmLoop();
     };
   }, []);
+
+  /** スタート */
+  function handleStart(): void {
+    const now: number = Date.now();
+    phaseStartedAtRef.current = now;
+    phaseSecondsAtStartRef.current = secondsLeft;
+    pausedConsumedRef.current = workElapsed;
+    setRunning(true);
+    persistState({
+      running: true,
+      phaseStartedAt: now,
+      phaseSecondsAtStart: secondsLeft,
+      pausedConsumed: workElapsed,
+    });
+  }
+
+  /** 一時停止 */
+  function handlePause(): void {
+    // 現在の残り秒数を確定
+    const now: number = Date.now();
+    const elapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
+    const remaining: number = Math.max(0, phaseSecondsAtStartRef.current - elapsed);
+    setSecondsLeft(remaining);
+    phaseSecondsAtStartRef.current = remaining;
+
+    // 作業フェーズなら累計を更新
+    if (phase === 'work') {
+      const newWorkElapsed: number = pausedConsumedRef.current + elapsed;
+      setWorkElapsed(newWorkElapsed);
+      pausedConsumedRef.current = newWorkElapsed;
+    }
+
+    setRunning(false);
+    stopAlarmLoop();
+    persistState({
+      running: false,
+      phaseSecondsAtStart: remaining,
+      workElapsed: phase === 'work' ? pausedConsumedRef.current : workElapsed,
+      pausedConsumed: pausedConsumedRef.current,
+    });
+  }
 
   /** 作業終了 → 休憩へ */
   function goToBreak(): void {
@@ -126,6 +283,24 @@ export default function PomodoroTimer({
     setOvertimeSeconds(0);
     setPhase('break');
     setSecondsLeft(BREAK_SECONDS);
+
+    // 作業の累計を確定
+    const now: number = Date.now();
+    const elapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
+    const newWorkElapsed: number = pausedConsumedRef.current + elapsed;
+    setWorkElapsed(newWorkElapsed);
+    pausedConsumedRef.current = newWorkElapsed;
+
+    phaseStartedAtRef.current = now;
+    phaseSecondsAtStartRef.current = BREAK_SECONDS;
+
+    persistState({
+      phase: 'break',
+      phaseStartedAt: now,
+      phaseSecondsAtStart: BREAK_SECONDS,
+      workElapsed: newWorkElapsed,
+      pausedConsumed: newWorkElapsed,
+    });
   }
 
   /** 休憩終了 → 作業へ */
@@ -135,6 +310,17 @@ export default function PomodoroTimer({
     setOvertimeSeconds(0);
     setPhase('work');
     setSecondsLeft(WORK_SECONDS);
+
+    const now: number = Date.now();
+    phaseStartedAtRef.current = now;
+    phaseSecondsAtStartRef.current = WORK_SECONDS;
+    // pausedConsumedRefはそのまま（作業の累計を引き継ぐ）
+
+    persistState({
+      phase: 'work',
+      phaseStartedAt: now,
+      phaseSecondsAtStart: WORK_SECONDS,
+    });
   }
 
   /** 閉じるときに作業経過分を実績に加算（休憩は含まない） */
@@ -143,10 +329,20 @@ export default function PomodoroTimer({
       window.clearInterval(intervalRef.current);
     }
     stopAlarmLoop();
-    const minutes: number = Math.round(workElapsed / 60);
+
+    // 最終的なworkElapsedを計算
+    let finalWorkElapsed: number = workElapsed;
+    if (running && phase === 'work') {
+      const now: number = Date.now();
+      const elapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
+      finalWorkElapsed = pausedConsumedRef.current + elapsed;
+    }
+
+    const minutes: number = Math.round(finalWorkElapsed / 60);
     if (minutes > 0) {
       onAddMinutes(minutes);
     }
+    clearState();
     onClose();
   }
 
@@ -186,11 +382,11 @@ export default function PomodoroTimer({
               </button>
             )
           ) : !running ? (
-            <button type="button" onClick={() => setRunning(true)} className={styles.primaryBtn}>
-              スタート
+            <button type="button" onClick={handleStart} className={styles.primaryBtn}>
+              {phaseStartedAtRef.current > 0 ? '再開' : 'スタート'}
             </button>
           ) : (
-            <button type="button" onClick={() => setRunning(false)} className={styles.iconBtn}>
+            <button type="button" onClick={handlePause} className={styles.iconBtn}>
               一時停止
             </button>
           )}
