@@ -6,7 +6,7 @@ import { minutesToText } from './utils';
 import styles from './page.module.css';
 
 type Phase = 'work' | 'break';
-type TimerMode = 'pomodoro' | 'timer';
+type TimerMode = 'pomodoro' | 'stopwatch';
 
 const STORAGE_KEY: string = 'kiroku:pomodoro';
 
@@ -83,7 +83,6 @@ export default function PomodoroTimer({
   const restored: PomodoroState | null = loadState(todo.id);
 
   const [timerMode, setTimerMode] = useState<TimerMode>(restored?.timerMode ?? 'pomodoro');
-  const [timerInputMin, setTimerInputMin] = useState<string>('30');
   const [phase, setPhase] = useState<Phase>(restored?.phase ?? 'work');
   const [running, setRunning] = useState<boolean>(restored?.running ?? false);
   const [workElapsed, setWorkElapsed] = useState<number>(restored?.workElapsed ?? 0);
@@ -237,22 +236,24 @@ export default function PomodoroTimer({
       intervalRef.current = window.setInterval(() => {
         const now: number = Date.now();
         const totalElapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
-        const remaining: number = phaseSecondsAtStartRef.current - totalElapsed;
 
-        if (remaining <= 0) {
-          // 超過モード
-          setSecondsLeft(0);
-          setOvertime(true);
-          setOvertimeSeconds(Math.abs(remaining));
-          startAlarmLoop();
+        if (timerMode === 'stopwatch') {
+          // ストップウォッチ: カウントアップ
+          setSecondsLeft(pausedConsumedRef.current + totalElapsed);
         } else {
-          setSecondsLeft(remaining);
-          setOvertime(false);
-          setOvertimeSeconds(0);
+          // ポモドーロ: カウントダウン
+          const remaining: number = phaseSecondsAtStartRef.current - totalElapsed;
+          if (remaining <= 0) {
+            setSecondsLeft(0);
+            setOvertime(true);
+            setOvertimeSeconds(Math.abs(remaining));
+            startAlarmLoop();
+          } else {
+            setSecondsLeft(remaining);
+            setOvertime(false);
+            setOvertimeSeconds(0);
+          }
         }
-
-        // 作業フェーズの場合、workElapsedを実時間で更新
-        // workElapsed = 復元時の値 + 今のフェーズが作業なら経過秒数
       }, 1000);
     }
     return () => {
@@ -260,7 +261,7 @@ export default function PomodoroTimer({
         window.clearInterval(intervalRef.current);
       }
     };
-  }, [running]);
+  }, [running, timerMode]);
 
   // workElapsedを実時間で計算するuseEffect
   useEffect(() => {
@@ -296,47 +297,64 @@ export default function PomodoroTimer({
     };
   }, []);
 
-  /** スタート */
+  /** スタート（ポモドーロ再開 or ストップウォッチ再開） */
   function handleStart(): void {
     const now: number = Date.now();
     phaseStartedAtRef.current = now;
-    phaseSecondsAtStartRef.current = secondsLeft;
+    phaseSecondsAtStartRef.current = timerMode === 'stopwatch' ? 0 : secondsLeft;
     pausedConsumedRef.current = workElapsed;
     setRunning(true);
-    scheduleNotification(secondsLeft * 1000, phase);
+    if (timerMode !== 'stopwatch') {
+      scheduleNotification(secondsLeft * 1000, phase);
+    }
     persistState({
       running: true,
       phaseStartedAt: now,
-      phaseSecondsAtStart: secondsLeft,
+      phaseSecondsAtStart: timerMode === 'stopwatch' ? 0 : secondsLeft,
       pausedConsumed: workElapsed,
     });
   }
 
   /** 一時停止 */
   function handlePause(): void {
-    // 現在の残り秒数を確定
     const now: number = Date.now();
     const elapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
-    const remaining: number = Math.max(0, phaseSecondsAtStartRef.current - elapsed);
-    setSecondsLeft(remaining);
-    phaseSecondsAtStartRef.current = remaining;
 
-    // 作業フェーズなら累計を更新
-    if (phase === 'work') {
-      const newWorkElapsed: number = pausedConsumedRef.current + elapsed;
-      setWorkElapsed(newWorkElapsed);
-      pausedConsumedRef.current = newWorkElapsed;
+    if (timerMode === 'stopwatch') {
+      // ストップウォッチ: 累計経過秒数を保存
+      const totalElapsed: number = pausedConsumedRef.current + elapsed;
+      setSecondsLeft(totalElapsed);
+      setWorkElapsed(totalElapsed);
+      pausedConsumedRef.current = totalElapsed;
+      setRunning(false);
+      persistState({
+        running: false,
+        phaseSecondsAtStart: 0,
+        workElapsed: totalElapsed,
+        pausedConsumed: totalElapsed,
+      });
+    } else {
+      // ポモドーロ: 残り秒数を確定
+      const remaining: number = Math.max(0, phaseSecondsAtStartRef.current - elapsed);
+      setSecondsLeft(remaining);
+      phaseSecondsAtStartRef.current = remaining;
+
+      if (phase === 'work') {
+        const newWorkElapsed: number = pausedConsumedRef.current + elapsed;
+        setWorkElapsed(newWorkElapsed);
+        pausedConsumedRef.current = newWorkElapsed;
+      }
+
+      setRunning(false);
+      stopAlarmLoop();
+      cancelNotification();
+      persistState({
+        running: false,
+        phaseSecondsAtStart: remaining,
+        workElapsed: phase === 'work' ? pausedConsumedRef.current : workElapsed,
+        pausedConsumed: pausedConsumedRef.current,
+      });
     }
-
-    setRunning(false);
-    stopAlarmLoop();
-    cancelNotification();
-    persistState({
-      running: false,
-      phaseSecondsAtStart: remaining,
-      workElapsed: phase === 'work' ? pausedConsumedRef.current : workElapsed,
-      pausedConsumed: pausedConsumedRef.current,
-    });
   }
 
   /** 作業終了 → 休憩へ */
@@ -413,39 +431,39 @@ export default function PomodoroTimer({
     onClose();
   }
 
-  const displaySeconds: number = overtime ? overtimeSeconds : secondsLeft;
+  const displaySeconds: number = timerMode === 'stopwatch'
+    ? secondsLeft
+    : (overtime ? overtimeSeconds : secondsLeft);
   const min: number = Math.floor(displaySeconds / 60);
   const sec: number = displaySeconds % 60;
-  const display: string = `${overtime ? '+' : ''}${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+  const display: string = timerMode === 'stopwatch'
+    ? `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${overtime ? '+' : ''}${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 
-  const phaseLabel: string = timerMode === 'timer'
-    ? (overtime ? '⏰ 時間超過！' : '⏱ タイマー')
+  const phaseLabel: string = timerMode === 'stopwatch'
+    ? (running ? '⏱ 計測中' : (workElapsed > 0 ? '⏱ 一時停止中' : '⏱ ストップウォッチ'))
     : (overtime
       ? (phase === 'work' ? '⏰ 作業時間超過！' : '⏰ 休憩時間超過！')
       : (phase === 'work' ? '作業中' : '☕ 休憩中'));
 
-  const phaseColor: string = overtime
-    ? '#ef4444'
-    : (timerMode === 'timer' ? '#f59e0b' : (phase === 'work' ? '#3b82f6' : '#22c55e'));
+  const phaseColor: string = timerMode === 'stopwatch'
+    ? '#f59e0b'
+    : (overtime ? '#ef4444' : (phase === 'work' ? '#3b82f6' : '#22c55e'));
 
-  /** タイマーモード: 指定分数でスタート */
-  function handleTimerStart(): void {
-    const mins: number = Math.max(1, parseInt(timerInputMin, 10) || 30);
-    const secs: number = mins * 60;
+  /** ストップウォッチモード: 0からカウントアップ開始 */
+  function handleStopwatchStart(): void {
     const now: number = Date.now();
     phaseStartedAtRef.current = now;
-    phaseSecondsAtStartRef.current = secs;
+    phaseSecondsAtStartRef.current = 0;
     pausedConsumedRef.current = workElapsed;
-    setSecondsLeft(secs);
     setRunning(true);
     setPhase('work');
-    scheduleNotification(secs * 1000, 'work');
     persistState({
-      timerMode: 'timer',
+      timerMode: 'stopwatch',
       running: true,
       phase: 'work',
       phaseStartedAt: now,
-      phaseSecondsAtStart: secs,
+      phaseSecondsAtStart: 0,
       pausedConsumed: workElapsed,
     });
   }
@@ -473,16 +491,16 @@ export default function PomodoroTimer({
             </button>
             <button
               type="button"
-              onClick={() => { setTimerMode('timer'); setSecondsLeft(parseInt(timerInputMin, 10) * 60 || 1800); }}
+              onClick={() => { setTimerMode('stopwatch'); setSecondsLeft(0); }}
               style={{
                 padding: '8px 20px', borderRadius: '0 8px 8px 0', fontSize: 14, cursor: 'pointer',
                 border: '1px solid var(--card-border)', borderLeft: 'none',
-                background: timerMode === 'timer' ? '#f59e0b' : 'var(--card-bg)',
-                color: timerMode === 'timer' ? 'white' : 'var(--foreground)',
+                background: timerMode === 'stopwatch' ? '#f59e0b' : 'var(--card-bg)',
+                color: timerMode === 'stopwatch' ? 'white' : 'var(--foreground)',
                 fontWeight: 600,
               }}
             >
-              ⏱ タイマー
+              ⏱ ストップウォッチ
             </button>
           </div>
         )}
@@ -495,47 +513,22 @@ export default function PomodoroTimer({
           予定 {minutesToText(todo.estMin)} / 実績 {minutesToText(todo.actualMin)}
         </p>
 
-        {/* タイマーモード: 未開始時に分数入力 */}
-        {timerMode === 'timer' && isNotStarted && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-            <input
-              type="number"
-              min="1"
-              max="999"
-              value={timerInputMin}
-              onChange={(e) => {
-                setTimerInputMin(e.target.value);
-                const mins: number = parseInt(e.target.value, 10) || 30;
-                setSecondsLeft(mins * 60);
-              }}
-              style={{ width: 70, fontSize: 20, textAlign: 'center', padding: '6px 8px', borderRadius: 8, border: '1px solid var(--card-border)' }}
-            />
-            <span style={{ fontSize: 16, color: 'var(--muted)' }}>分</span>
-          </div>
-        )}
-
         <div className={styles.pomodoroTimer}>{display}</div>
         <div className={styles.pomodoroControls}>
           {overtime ? (
-            timerMode === 'pomodoro' ? (
-              phase === 'work' ? (
-                <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
-                  🔕 アラーム停止 → 休憩へ
-                </button>
-              ) : (
-                <button type="button" onClick={goToWork} className={styles.primaryBtn}>
-                  🔕 アラーム停止 → 作業へ
-                </button>
-              )
+            phase === 'work' ? (
+              <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
+                🔕 アラーム停止 → 休憩へ
+              </button>
             ) : (
-              <button type="button" onClick={() => { stopAlarmLoop(); cancelNotification(); setOvertime(false); }} className={styles.primaryBtn}>
-                🔕 アラーム停止
+              <button type="button" onClick={goToWork} className={styles.primaryBtn}>
+                🔕 アラーム停止 → 作業へ
               </button>
             )
           ) : !running ? (
             <button
               type="button"
-              onClick={timerMode === 'timer' && isNotStarted ? handleTimerStart : handleStart}
+              onClick={timerMode === 'stopwatch' && isNotStarted ? handleStopwatchStart : handleStart}
               className={styles.primaryBtn}
             >
               {phaseStartedAtRef.current > 0 ? '再開' : 'スタート'}
