@@ -89,7 +89,6 @@ export default function TodayPanel({
   }, [undoneTodos, selectedIds]);
 
   const totalEst: number = selectedTodos.reduce((sum, t) => sum + t.estMin, 0);
-  const totalActual: number = selectedTodos.reduce((sum, t) => sum + t.actualMin, 0);
   const todayActual: number = selectedTodos.reduce((sum, t) => sum + (todayActualMap[t.id] ?? 0), 0);
   const remaining: number = Math.max(0, totalEst - todayActual);
 
@@ -234,6 +233,33 @@ export default function TodayPanel({
           </div>
         </div>
 
+        {/* 実績入力（選択中のカードに常時表示） */}
+        {isSelected && !t.done && (
+          <div
+            style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, paddingLeft: 30 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              type="number"
+              min="0"
+              placeholder="+分"
+              value={logMinutes[t.id] ?? ''}
+              onChange={(e) => setLogMinutes((prev) => ({ ...prev, [t.id]: e.target.value }))}
+              onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
+              className={styles.inputNarrow}
+              style={{ width: 60 }}
+            />
+            <button
+              type="button"
+              onClick={() => handleAddLog(t.id)}
+              className={styles.iconBtn}
+              style={{ fontSize: 12, padding: '4px 8px' }}
+            >
+              実績を加算
+            </button>
+          </div>
+        )}
+
         {/* 展開時: renderExpandedがあればホーム画面と同じ、なければ簡易表示 */}
         {isExpanded && (
           <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--card-border)' }} onClick={(e) => e.stopPropagation()}>
@@ -267,7 +293,7 @@ export default function TodayPanel({
       {/* 合計サマリー */}
       <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>今日やること ({selectedTodos.length}件)</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 8 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>予定合計</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#3b82f6' }}>{minutesToText(totalEst)}</div>
@@ -275,10 +301,6 @@ export default function TodayPanel({
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>本日実績</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#22c55e' }}>{minutesToText(todayActual)}</div>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: 12, color: 'var(--muted)' }}>累計実績</div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: '#6b7280' }}>{minutesToText(totalActual)}</div>
           </div>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, color: 'var(--muted)' }}>残り</div>
