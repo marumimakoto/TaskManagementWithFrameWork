@@ -2834,7 +2834,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             <article
               ref={(el) => { cardRefsMap.current[t.id] = el; }}
               data-todo-id={t.id}
-              className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''}`}
+              className={`${styles.card} ${styles[bgClass]} ${isExpanded ? styles.cardExpanded : ''} ${isDragOverChild ? styles.cardDragOverChild : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx && dragId !== t.id ? styles.cardDragOverTop : ''} ${dragOverMode === 'between' && dropBetweenIndex === idx + 1 && dragId !== t.id ? styles.cardDragOverBottom : ''} ${selectedId === t.id ? styles.cardSelected : ''} ${dragId === t.id ? styles.cardDragging : ''} ${touchDragId === t.id ? styles.cardTouchDragging : ''}`}
               style={{
                 fontSize: Math.pow(0.9, depth) + 'em',
                 flex: 1,
@@ -2873,6 +2873,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   touchStartRef.current = null;
                   setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
                   setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                  // ページスクロールを無効化
+                  document.body.style.overflow = 'hidden';
+                  document.body.style.touchAction = 'none';
                   // 振動フィードバック（対応ブラウザのみ）
                   if (navigator.vibrate) {
                     navigator.vibrate(50);
@@ -2946,6 +2949,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 if (!isMobile) {
                   return;
                 }
+                // ページスクロールを復元
+                document.body.style.overflow = '';
+                document.body.style.touchAction = '';
                 // 長押しタイマーをクリア
                 if (longPressTimerRef.current) {
                   clearTimeout(longPressTimerRef.current);

@@ -709,9 +709,19 @@
   outline-offset: -2px;
 }
 
-/* ドラッグ中のカード自体を半透明に */
+/* ドラッグ中のカード自体を半透明に（PC） */
 .cardDragging {
   opacity: 0.4;
+}
+
+/* モバイルタッチドラッグ中のカード */
+.cardTouchDragging {
+  opacity: 0.85;
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  z-index: 100;
+  touch-action: none;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
 }
 
 /* 階層化ドロップ時：カード全体が青いアウトライン */
