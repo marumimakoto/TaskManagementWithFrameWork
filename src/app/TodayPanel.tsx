@@ -6,6 +6,7 @@ import { minutesToText, formatDeadline } from './utils';
 import styles from './page.module.css';
 
 const TODAY_IDS_KEY: string = 'kiroku:today-ids';
+const TODAY_DATE_KEY: string = 'kiroku:today-date';
 
 /**
  * 今日やることビュー
@@ -29,6 +30,15 @@ export default function TodayPanel({
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     try {
+      // 日付が変わっていたらリセット
+      const todayStr: string = new Date().toISOString().slice(0, 10);
+      const savedDate: string | null = localStorage.getItem(TODAY_DATE_KEY);
+      if (savedDate && savedDate !== todayStr) {
+        localStorage.removeItem(TODAY_IDS_KEY);
+        localStorage.setItem(TODAY_DATE_KEY, todayStr);
+        return new Set<string>();
+      }
+      localStorage.setItem(TODAY_DATE_KEY, todayStr);
       const raw: string | null = localStorage.getItem(TODAY_IDS_KEY);
       if (raw) {
         return new Set<string>(JSON.parse(raw) as string[]);
@@ -84,9 +94,10 @@ export default function TodayPanel({
     return todos.filter((t) => !t.done);
   }, [todos]);
 
+  // 選択中のタスク（完了タスクも含む — 当日中は表示を維持）
   const selectedTodos: Todo[] = useMemo(() => {
-    return undoneTodos.filter((t) => selectedIds.has(t.id));
-  }, [undoneTodos, selectedIds]);
+    return todos.filter((t) => selectedIds.has(t.id));
+  }, [todos, selectedIds]);
 
   const totalEst: number = selectedTodos.reduce((sum, t) => sum + t.estMin, 0);
   const todayActual: number = selectedTodos.reduce((sum, t) => sum + (todayActualMap[t.id] ?? 0), 0);
