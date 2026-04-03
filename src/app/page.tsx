@@ -569,7 +569,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       // 一括取得（3回のAPI呼び出しを1回に統合）
       try {
         const res: Response = await fetch('/api/init?userId=' + user.id);
-        const data: { todos: Todo[]; settings: UserSettings | null; isPro: boolean } = await res.json();
+        const data: { todos: Todo[]; settings: UserSettings | null; isPro: boolean; todayMin?: Record<string, number> } = await res.json();
 
         // タスク
         const fetchedTodos: Todo[] = data.todos;
@@ -608,6 +608,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         if (data.settings) {
           setSettings(data.settings);
           try { localStorage.setItem('kiroku:settings:' + user.id, JSON.stringify(data.settings)); } catch { /* ignore */ }
+        }
+
+        // 今日の作業時間
+        if (data.todayMin) {
+          setTodayMinMap(data.todayMin);
         }
 
         // プロ版
@@ -709,6 +714,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
   // 作業ログ
   const [workLogs, setWorkLogs] = useState<Record<string, WorkLog[]>>({});
+  const [todayMinMap, setTodayMinMap] = useState<Record<string, number>>({});
   const [logInput, setLogInput] = useState<string>('');
   const [showLogId, setShowLogId] = useState<string | null>(null);
 
@@ -1266,6 +1272,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: `+${addMin}分 作業`, date: dateStr || undefined }),
     });
+    // 今日分の場合、todayMinMapを更新
+    if (!dateStr) {
+      setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + addMin }));
+    }
   }
 
   /**
@@ -3266,6 +3276,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       ⏱{minutesToText(t.actualMin)}
                     </span>
                   )}
+                  {(todayMinMap[t.id] ?? 0) > 0 && (
+                    <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 4 }}>
+                      (本日{minutesToText(todayMinMap[t.id])})
+                    </span>
+                  )}
                 </div>
 
               </div>
@@ -3882,6 +3897,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ content: `+${minutes}分 ポモドーロ作業` }),
             });
+            setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
           }}
           workMinutes={settings.pomodoroWork ?? 25}
           breakMinutes={settings.pomodoroBreak ?? 5}
