@@ -2602,6 +2602,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             <span className={styles.legendDot} style={{ background: '#22c55e' }} />
             完了({legendCounts.done})
           </span>
+          <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>
+            📋=予定 ⏱=累計実績
+          </span>
         </div>
         <div data-tutorial="view-mode-buttons" className={styles.viewModeButtons}>
           <select
