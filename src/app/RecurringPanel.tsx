@@ -146,10 +146,10 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
   async function saveRecurrence(id: string, recurrenceValue?: string): Promise<void> {
     const rec: string = recurrenceValue ?? editRecurrence;
     try {
-      await fetch('/api/todos/' + id, {
+      await fetch('/api/todos/recurring', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ updates: { recurrence: rec } }),
+        body: JSON.stringify({ id, updates: { recurrence: rec } }),
       });
       setEditingId(null);
       await fetchItems();
