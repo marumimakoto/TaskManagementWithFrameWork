@@ -744,6 +744,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const [dragOverMode, setDragOverMode] = useState<'child' | 'between' | null>(null);
   const [dropBetweenIndex, setDropBetweenIndex] = useState<number | null>(null);
+  const [mouseDragY, setMouseDragY] = useState<number>(0);
+  const mouseDragStartY = useRef<number>(0);
+  const dropBetweenIndexRef = useRef<number | null>(null);
+
+  // dropBetweenIndexの変更をrefに同期（mouseupハンドラから参照するため）
+  useEffect(() => {
+    dropBetweenIndexRef.current = dropBetweenIndex;
+  }, [dropBetweenIndex]);
 
   // スマホ用スワイプ
   const touchStartRef = useRef<{ x: number; y: number; id: string; time: number } | null>(null);
@@ -2841,15 +2849,17 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               style={{
                 fontSize: Math.pow(0.9, depth) + 'em',
                 flex: 1,
-                transform: touchDragId === t.id
-                  ? `translateY(${touchDragY}px)`
-                  : swipeOffset[t.id] ? `translateX(${swipeOffset[t.id]}px)` : undefined,
-                transition: touchDragId === t.id ? 'none' : swipeOffset[t.id] ? 'none' : 'transform 0.3s ease',
+                transform: (dragId === t.id && mouseDragY !== 0)
+                  ? `translateY(${mouseDragY}px)`
+                  : touchDragId === t.id
+                    ? `translateY(${touchDragY}px)`
+                    : swipeOffset[t.id] ? `translateX(${swipeOffset[t.id]}px)` : undefined,
+                transition: (dragId === t.id && mouseDragY !== 0) ? 'none' : touchDragId === t.id ? 'none' : swipeOffset[t.id] ? 'none' : 'transform 0.3s ease',
                 background: touchDragId === t.id ? 'var(--card-bg)' : swipeAction[t.id] === 'nest' ? '#dbeafe' : swipeAction[t.id] === 'unnest' ? '#fef3c7' : undefined,
-                opacity: touchDragId === t.id ? 0.8 : 1,
-                boxShadow: touchDragId === t.id ? '0 8px 24px rgba(0,0,0,0.2)' : undefined,
-                zIndex: touchDragId === t.id ? 100 : undefined,
-                position: touchDragId === t.id ? 'relative' as const : undefined,
+                opacity: (dragId === t.id && mouseDragY !== 0) ? 0.85 : touchDragId === t.id ? 0.8 : 1,
+                boxShadow: (dragId === t.id && mouseDragY !== 0) ? '0 8px 24px rgba(0,0,0,0.18)' : touchDragId === t.id ? '0 8px 24px rgba(0,0,0,0.2)' : undefined,
+                zIndex: (dragId === t.id && mouseDragY !== 0) ? 100 : touchDragId === t.id ? 100 : undefined,
+                position: (dragId === t.id && mouseDragY !== 0) ? 'relative' as const : touchDragId === t.id ? 'relative' as const : undefined,
               }}
               onClick={() => {
                 if (!isDraggingRef.current) {
@@ -3102,19 +3112,90 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               {!isMobile && (
                 <DragHandle
                   onDragStart={(e) => {
-                    isDraggingRef.current = true;
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.dataTransfer.setData('text/plain', t.id);
-                    requestAnimationFrame(() => {
-                      setDragId(t.id);
-                    });
+                    // HTML5 DnDを無効化し、mouseイベントで処理
+                    e.preventDefault();
                   }}
-                  onDragEnd={() => {
-                    isDraggingRef.current = false;
-                    setDragId(null);
-                    setDragOverId(null);
-                    setDragOverMode(null);
-                    setDropBetweenIndex(null);
+                  onDragEnd={() => {}}
+                  onMouseDown={(e: React.MouseEvent) => {
+                    e.preventDefault();
+                    isDraggingRef.current = true;
+                    setDragId(t.id);
+                    mouseDragStartY.current = e.clientY;
+                    setMouseDragY(0);
+
+                    const handleMouseMove = (ev: MouseEvent): void => {
+                      const dy: number = ev.clientY - mouseDragStartY.current;
+                      setMouseDragY(dy);
+                      // ドロップ先のインデックスを計算
+                      const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
+                      let newDropIdx: number | null = null;
+                      for (let ci = 0; ci < cards.length; ci++) {
+                        const rect: DOMRect = cards[ci].getBoundingClientRect();
+                        const mid: number = rect.top + rect.height / 2;
+                        if (ev.clientY < mid) {
+                          newDropIdx = ci;
+                          break;
+                        }
+                      }
+                      if (newDropIdx === null) {
+                        newDropIdx = cards.length;
+                      }
+                      setDropBetweenIndex(newDropIdx);
+                      setDragOverMode('between');
+                    };
+
+                    const handleMouseUp = (): void => {
+                      document.removeEventListener('mousemove', handleMouseMove);
+                      document.removeEventListener('mouseup', handleMouseUp);
+
+                      // ドロップ処理
+                      if (dropBetweenIndexRef.current !== null) {
+                        const currentIdx: number = filteredTreeList.findIndex((item) => item.todo.id === t.id);
+                        if (currentIdx !== -1 && dropBetweenIndexRef.current !== currentIdx) {
+                          const targetIdx: number = dropBetweenIndexRef.current > currentIdx ? dropBetweenIndexRef.current - 1 : dropBetweenIndexRef.current;
+                          const prevItem: { todo: Todo } | undefined = filteredTreeList[targetIdx - 1];
+                          const nextItem: { todo: Todo } | undefined = filteredTreeList[targetIdx];
+                          let newOrder: number;
+                          if (prevItem && nextItem) {
+                            newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
+                          } else if (prevItem) {
+                            newOrder = prevItem.todo.sortOrder + 10;
+                          } else if (nextItem) {
+                            newOrder = nextItem.todo.sortOrder - 10;
+                          } else {
+                            newOrder = 0;
+                          }
+                          const descendantIds: string[] = getDescendantIds(t.id, todos);
+                          const movedIds: Set<string> = new Set([t.id, ...descendantIds]);
+                          const oldOrder: number = t.sortOrder;
+                          const diff: number = newOrder - oldOrder;
+                          const rollback: Todo[] = todos;
+                          const updates: { id: string; sortOrder: number }[] = [];
+                          setTodos((prev) =>
+                            prev.map((todo) => {
+                              if (movedIds.has(todo.id)) {
+                                const updatedOrder: number = todo.sortOrder + diff;
+                                updates.push({ id: todo.id, sortOrder: updatedOrder });
+                                return { ...todo, sortOrder: updatedOrder };
+                              }
+                              return todo;
+                            }),
+                          );
+                          persistSortOrders(updates, rollback);
+                          setSortMode('manual');
+                        }
+                      }
+
+                      isDraggingRef.current = false;
+                      setDragId(null);
+                      setDragOverId(null);
+                      setDragOverMode(null);
+                      setDropBetweenIndex(null);
+                      setMouseDragY(0);
+                    };
+
+                    document.addEventListener('mousemove', handleMouseMove);
+                    document.addEventListener('mouseup', handleMouseUp);
                   }}
                 />
               )}
