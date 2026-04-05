@@ -2851,96 +2851,107 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 if (longPressTimerRef.current) {
                   clearTimeout(longPressTimerRef.current);
                 }
-                // 長押し待機中のスクロールを即座に抑制
-                document.body.style.overflow = 'hidden';
-                document.body.style.touchAction = 'none';
+
+                // ネイティブDOMリスナーで { passive: false } を使いスクロールを確実にブロック
+                const cardEl: HTMLElement | null = e.currentTarget as HTMLElement;
+                let isDragging: boolean = false;
+                let longPressTriggered: boolean = false;
+
+                const nativeTouchMove = (ev: TouchEvent): void => {
+                  const t2 = ev.touches[0];
+
+                  if (isDragging) {
+                    // ドラッグモード中: スクロールを完全にブロック
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    const dy: number = t2.clientY - touchDragStartY.current;
+                    setTouchDragY(dy);
+                    const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
+                    let dropIdx: number | null = null;
+                    for (let i = 0; i < cards.length; i++) {
+                      const rect: DOMRect = cards[i].getBoundingClientRect();
+                      const mid: number = rect.top + rect.height / 2;
+                      if (t2.clientY < mid) {
+                        dropIdx = i;
+                        break;
+                      }
+                    }
+                    if (dropIdx === null) {
+                      dropIdx = cards.length;
+                    }
+                    setTouchDropIndex(dropIdx);
+                    return;
+                  }
+
+                  // 長押し待機中: 少し動いたらキャンセル
+                  if (longPressTimerRef.current) {
+                    const dx: number = t2.clientX - (touchStartRef.current?.x ?? 0);
+                    const dy: number = t2.clientY - (touchStartRef.current?.y ?? 0);
+                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+                      clearTimeout(longPressTimerRef.current);
+                      longPressTimerRef.current = null;
+                    } else {
+                      // まだ長押し待機中でほぼ動いていない → スクロールをブロック
+                      ev.preventDefault();
+                    }
+                  }
+
+                  // 左右スワイプ処理
+                  if (!touchStartRef.current || touchStartRef.current.id !== t.id) {
+                    return;
+                  }
+                  const dx: number = t2.clientX - touchStartRef.current.x;
+                  const dy: number = t2.clientY - touchStartRef.current.y;
+                  if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
+                    touchStartRef.current = null;
+                    setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
+                    setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                    return;
+                  }
+                  if (Math.abs(dx) > 15) {
+                    ev.preventDefault();
+                    setSwipeOffset((prev) => ({ ...prev, [t.id]: dx }));
+                    if (dx < -60) {
+                      setSwipeAction((prev) => ({ ...prev, [t.id]: 'nest' }));
+                    } else if (dx > 60 && t.parentId) {
+                      setSwipeAction((prev) => ({ ...prev, [t.id]: 'unnest' }));
+                    } else {
+                      setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
+                    }
+                  }
+                };
+
+                const nativeTouchEnd = (): void => {
+                  cardEl.removeEventListener('touchmove', nativeTouchMove);
+                  cardEl.removeEventListener('touchend', nativeTouchEnd);
+                  cardEl.removeEventListener('touchcancel', nativeTouchEnd);
+                };
+
+                cardEl.addEventListener('touchmove', nativeTouchMove, { passive: false });
+                cardEl.addEventListener('touchend', nativeTouchEnd);
+                cardEl.addEventListener('touchcancel', nativeTouchEnd);
 
                 longPressTimerRef.current = setTimeout(() => {
                   // 長押し成立 → ドラッグモード開始
+                  isDragging = true;
+                  longPressTriggered = true;
                   setTouchDragId(t.id);
                   setTouchDragY(0);
-                  // スワイプをキャンセル
                   touchStartRef.current = null;
                   setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
                   setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
-                  // 振動フィードバック（対応ブラウザのみ）
                   if (navigator.vibrate) {
                     navigator.vibrate(50);
                   }
                 }, 500);
               }}
-              onTouchMove={(e) => {
-                if (!isMobile) {
-                  return;
-                }
-                const touch = e.touches[0];
-
-                // ドラッグモード中の処理
-                if (touchDragId === t.id) {
-                  e.preventDefault();
-                  const dy: number = touch.clientY - touchDragStartY.current;
-                  setTouchDragY(dy);
-                  // ドロップ先のインデックスを計算
-                  const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
-                  let dropIdx: number | null = null;
-                  for (let i = 0; i < cards.length; i++) {
-                    const rect: DOMRect = cards[i].getBoundingClientRect();
-                    const mid: number = rect.top + rect.height / 2;
-                    if (touch.clientY < mid) {
-                      dropIdx = i;
-                      break;
-                    }
-                  }
-                  if (dropIdx === null) {
-                    dropIdx = cards.length;
-                  }
-                  setTouchDropIndex(dropIdx);
-                  return;
-                }
-
-                // 長押しタイマー中に動いたらキャンセル + スクロール復元
-                if (longPressTimerRef.current) {
-                  const dx: number = touch.clientX - (touchStartRef.current?.x ?? 0);
-                  const dy: number = touch.clientY - (touchStartRef.current?.y ?? 0);
-                  if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                    clearTimeout(longPressTimerRef.current);
-                    longPressTimerRef.current = null;
-                    document.body.style.overflow = '';
-                    document.body.style.touchAction = '';
-                  }
-                }
-
-                // 左右スワイプ処理（既存）
-                if (!touchStartRef.current || touchStartRef.current.id !== t.id) {
-                  return;
-                }
-                const dx: number = touch.clientX - touchStartRef.current.x;
-                const dy: number = touch.clientY - touchStartRef.current.y;
-                if (Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 10) {
-                  touchStartRef.current = null;
-                  setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
-                  setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
-                  return;
-                }
-                if (Math.abs(dx) > 15) {
-                  e.preventDefault();
-                  setSwipeOffset((prev) => ({ ...prev, [t.id]: dx }));
-                  if (dx < -60) {
-                    setSwipeAction((prev) => ({ ...prev, [t.id]: 'nest' }));
-                  } else if (dx > 60 && t.parentId) {
-                    setSwipeAction((prev) => ({ ...prev, [t.id]: 'unnest' }));
-                  } else {
-                    setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
-                  }
-                }
+              onTouchMove={() => {
+                // touchmoveはネイティブリスナーで処理（passive: false でpreventDefault可能）
               }}
               onTouchEnd={() => {
                 if (!isMobile) {
                   return;
                 }
-                // ページスクロールを復元
-                document.body.style.overflow = '';
-                document.body.style.touchAction = '';
                 // 長押しタイマーをクリア
                 if (longPressTimerRef.current) {
                   clearTimeout(longPressTimerRef.current);
