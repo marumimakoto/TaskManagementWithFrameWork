@@ -3099,25 +3099,25 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     const handleMouseMove = (ev: MouseEvent): void => {
                       const dy: number = ev.clientY - mouseDragStartY.current;
                       setMouseDragY(dy);
-                      // ドロップ先のインデックスを計算（自分自身を除外）
+                      // ドロップ先のインデックスを計算
                       const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
-                      let newDropIdx: number | null = null;
+                      let insertBeforeIdx: number = cards.length;
                       for (let ci = 0; ci < cards.length; ci++) {
+                        const cardId: string | null = cards[ci].getAttribute('data-todo-id');
                         // ドラッグ中の自分自身はスキップ
-                        if (cards[ci].getAttribute('data-todo-id') === t.id) {
+                        if (cardId === t.id) {
                           continue;
                         }
                         const rect: DOMRect = cards[ci].getBoundingClientRect();
                         const mid: number = rect.top + rect.height / 2;
                         if (ev.clientY < mid) {
-                          newDropIdx = ci;
+                          // このカードのfilteredTreeList上のインデックスを取得
+                          const treeIdx: number = filteredTreeList.findIndex((item) => item.todo.id === cardId);
+                          insertBeforeIdx = treeIdx !== -1 ? treeIdx : ci;
                           break;
                         }
                       }
-                      if (newDropIdx === null) {
-                        newDropIdx = cards.length;
-                      }
-                      setDropBetweenIndex(newDropIdx);
+                      setDropBetweenIndex(insertBeforeIdx);
                       setDragOverMode('between');
                     };
 
@@ -3128,10 +3128,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       // ドロップ処理
                       if (dropBetweenIndexRef.current !== null) {
                         const currentIdx: number = filteredTreeList.findIndex((item) => item.todo.id === t.id);
-                        if (currentIdx !== -1 && dropBetweenIndexRef.current !== currentIdx) {
-                          const targetIdx: number = dropBetweenIndexRef.current > currentIdx ? dropBetweenIndexRef.current - 1 : dropBetweenIndexRef.current;
-                          const prevItem: { todo: Todo } | undefined = filteredTreeList[targetIdx - 1];
-                          const nextItem: { todo: Todo } | undefined = filteredTreeList[targetIdx];
+                        const dropIdx: number = dropBetweenIndexRef.current;
+                        if (currentIdx !== -1 && dropIdx !== currentIdx && dropIdx !== currentIdx + 1) {
+                          // dropIdxは「この位置の前に挿入」を意味する
+                          // 自分自身を抜いた後のリストで前後を計算
+                          const listWithoutSelf: { todo: Todo; depth: number }[] = filteredTreeList.filter((item) => item.todo.id !== t.id);
+                          const adjustedIdx: number = dropIdx > currentIdx ? dropIdx - 1 : dropIdx;
+                          const prevItem: { todo: Todo } | undefined = listWithoutSelf[adjustedIdx - 1];
+                          const nextItem: { todo: Todo } | undefined = listWithoutSelf[adjustedIdx];
                           let newOrder: number;
                           if (prevItem && nextItem) {
                             newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
