@@ -2961,10 +2961,12 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 // ドラッグモード終了 → ドロップ処理
                 if (touchDragId === t.id && touchDropIndex !== null) {
                   const currentIdx: number = filteredTreeList.findIndex((item) => item.todo.id === t.id);
-                  if (currentIdx !== -1 && touchDropIndex !== currentIdx) {
-                    const targetIdx: number = touchDropIndex > currentIdx ? touchDropIndex - 1 : touchDropIndex;
-                    const prevItem: { todo: Todo } | undefined = filteredTreeList[targetIdx - 1];
-                    const nextItem: { todo: Todo } | undefined = filteredTreeList[targetIdx];
+                  const dropIdx: number = touchDropIndex;
+                  if (currentIdx !== -1 && dropIdx !== currentIdx && dropIdx !== currentIdx + 1) {
+                    const listWithoutSelf: { todo: Todo; depth: number }[] = filteredTreeList.filter((item) => item.todo.id !== t.id);
+                    const adjustedIdx: number = dropIdx > currentIdx ? dropIdx - 1 : dropIdx;
+                    const prevItem: { todo: Todo } | undefined = listWithoutSelf[adjustedIdx - 1];
+                    const nextItem: { todo: Todo } | undefined = listWithoutSelf[adjustedIdx];
                     let newOrder: number;
                     if (prevItem && nextItem) {
                       newOrder = (prevItem.todo.sortOrder + nextItem.todo.sortOrder) / 2;
