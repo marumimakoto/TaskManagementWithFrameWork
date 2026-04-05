@@ -3126,10 +3126,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     const handleMouseMove = (ev: MouseEvent): void => {
                       const dy: number = ev.clientY - mouseDragStartY.current;
                       setMouseDragY(dy);
-                      // ドロップ先のインデックスを計算
+                      // ドロップ先のインデックスを計算（自分自身を除外）
                       const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
                       let newDropIdx: number | null = null;
                       for (let ci = 0; ci < cards.length; ci++) {
+                        // ドラッグ中の自分自身はスキップ
+                        if (cards[ci].getAttribute('data-todo-id') === t.id) {
+                          continue;
+                        }
                         const rect: DOMRect = cards[ci].getBoundingClientRect();
                         const mid: number = rect.top + rect.height / 2;
                         if (ev.clientY < mid) {
