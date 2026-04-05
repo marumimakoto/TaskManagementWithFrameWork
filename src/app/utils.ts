@@ -70,7 +70,7 @@ export function minutesToText(min: number): string {
   if (h <= 0) {
     return `${m}分`;
   }
-  return `${h}時間${m}分`;
+  return `${h}:${String(m).padStart(2, '0')}`;
 }
 
 /**
