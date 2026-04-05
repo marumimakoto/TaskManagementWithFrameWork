@@ -19,7 +19,7 @@ export default function RecurrenceSelector({
 }: {
   value: string;
   onChange: (newValue: string) => void;
-  onSave?: () => void;
+  onSave?: (builtValue?: string) => void;
   showSaveButton?: boolean;
 }): React.ReactElement {
   const todayDayIndex: number = new Date().getDay();
@@ -157,13 +157,13 @@ export default function RecurrenceSelector({
               type="number"
               min="1"
               value={customInterval}
-              onChange={(e) => setCustomInterval(e.target.value)}
+              onChange={(e) => { setCustomInterval(e.target.value); }}
               className={styles.inputNarrow}
               style={{ width: 50 }}
             />
             <select
               value={customUnit}
-              onChange={(e) => setCustomUnit(e.target.value)}
+              onChange={(e) => { setCustomUnit(e.target.value); }}
               className={styles.input}
               style={{ width: 80 }}
             >
@@ -250,7 +250,7 @@ export default function RecurrenceSelector({
                   const built: string = buildCustomRecurrence();
                   onChange(built);
                   if (onSave) {
-                    onSave();
+                    onSave(built);
                   }
                 }}
               >
