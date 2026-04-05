@@ -3563,70 +3563,86 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           {filteredTreeList.map(({ todo: t, depth }) => {
             const bgClass: 'cardDone' | 'cardDanger' | 'cardInProgress' = cardBgClass(t);
             const isEditingDeadline: boolean = editingId === t.id && editingField === 'deadline';
+            const isExpanded: boolean = expandedId === t.id;
             return (
               <div
                 key={t.id}
-                className={`${styles.compactCard} ${styles[bgClass]}`}
+                className={`${styles.compactCard} ${styles[bgClass]} ${isExpanded ? styles.compactCardExpanded : ''}`}
                 style={{ paddingLeft: depth * 16 + 8 }}
+                onClick={() => {
+                  if (expandedId === t.id) {
+                    setExpandedId(null);
+                  } else {
+                    setExpandedId(t.id);
+                  }
+                }}
               >
-                <input
-                  type="checkbox"
-                  checked={t.done}
-                  onChange={() => toggleDone(t.id)}
-                  className={styles.checkbox}
-                />
-                <span className={styles.compactTitle}>{t.title}</span>
-                {isEditingDeadline ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
                   <input
-                    type="date"
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={() => {
-                      saveFieldEdit(t.id);
-                      setEditingId(null);
-                      setEditingField(null);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
+                    type="checkbox"
+                    checked={t.done}
+                    onChange={() => toggleDone(t.id)}
+                    onClick={(e) => e.stopPropagation()}
+                    className={styles.checkbox}
+                  />
+                  <span className={styles.compactTitle}>{t.title}</span>
+                  {isEditingDeadline ? (
+                    <input
+                      type="date"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={() => {
                         saveFieldEdit(t.id);
                         setEditingId(null);
                         setEditingField(null);
-                      } else if (e.key === 'Escape') {
-                        setEditingId(null);
-                        setEditingField(null);
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={styles.inputNarrow}
-                    autoFocus
-                  />
-                ) : (
-                  <span
-                    className={styles.compactDeadline}
-                    style={{ color: t.deadline && t.deadline < Date.now() && !t.done ? '#ef4444' : undefined }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditingId(t.id);
-                      setEditingField('deadline');
-                      setEditValue(t.deadline ? toInputDeadline(t.deadline) : '');
-                    }}
-                    title="クリックで期限を変更"
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          saveFieldEdit(t.id);
+                          setEditingId(null);
+                          setEditingField(null);
+                        } else if (e.key === 'Escape') {
+                          setEditingId(null);
+                          setEditingField(null);
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={styles.inputNarrow}
+                      autoFocus
+                    />
+                  ) : (
+                    <span
+                      className={styles.compactDeadline}
+                      style={{ color: t.deadline && t.deadline < Date.now() && !t.done ? '#ef4444' : undefined }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditingId(t.id);
+                        setEditingField('deadline');
+                        setEditValue(t.deadline ? toInputDeadline(t.deadline) : '');
+                      }}
+                      title="クリックで期限を変更"
+                    >
+                      {t.deadline ? formatDeadline(t.deadline) : '—'}
+                    </span>
+                  )}
+                  {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
+                    <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
+                      {formatDateShort(t.createdAt)}
+                    </span>
+                  )}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); removeTodoWithUndo(t.id); }}
+                    className={styles.dangerIconBtn}
+                    title="削除"
                   >
-                    {t.deadline ? formatDeadline(t.deadline) : '—'}
-                  </span>
+                    🗑
+                  </button>
+                </div>
+                {isExpanded && (
+                  <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--card-border)', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+                    {renderExpandedContent(t)}
+                  </div>
                 )}
-                {(sortMode === 'createdAsc' || sortMode === 'createdDesc') && t.createdAt && (
-                  <span style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
-                    {formatDateShort(t.createdAt)}
-                  </span>
-                )}
-                <button
-                  onClick={(e) => { e.stopPropagation(); removeTodoWithUndo(t.id); }}
-                  className={styles.dangerIconBtn}
-                  title="削除"
-                >
-                  🗑
-                </button>
               </div>
             );
           })}
