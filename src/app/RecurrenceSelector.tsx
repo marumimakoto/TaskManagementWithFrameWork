@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import styles from './page.module.css';
 
 /** 曜日のキーと日本語名 */
@@ -104,6 +104,14 @@ export default function RecurrenceSelector({
     }
     return 'carry';
   }
+
+  // カスタム設定が変わるたびにonChangeでbuild済みの値を通知
+  useEffect(() => {
+    if (customMode) {
+      const built: string = buildCustomRecurrence();
+      onChange(built);
+    }
+  }, [customMode, customInterval, customUnit, customWeekDays, customMonthMode, customMonthDay, customMonthNth, customMonthNthDay]);
 
   const presets: { value: string; label: string }[] = [
     { value: 'carry', label: '繰り返さない' },

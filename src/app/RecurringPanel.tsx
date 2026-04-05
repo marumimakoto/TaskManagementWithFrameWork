@@ -489,16 +489,30 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
                     onSave={(builtValue?: string) => {
                       saveRecurrence(t.id, builtValue ?? editRecurrence);
                     }}
-                    showSaveButton={true}
+                    showSaveButton={false}
                   />
-                  <button
-                    type="button"
-                    className={styles.iconBtn}
-                    style={{ fontSize: '14px', padding: '6px 14px', marginTop: 8 }}
-                    onClick={() => setEditingId(null)}
-                  >
-                    キャンセル
-                  </button>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button
+                      type="button"
+                      className={styles.iconBtn}
+                      style={{ fontSize: '14px', padding: '6px 14px' }}
+                      onClick={() => setEditingId(null)}
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.primaryBtn}
+                      style={{ fontSize: '14px', padding: '6px 14px' }}
+                      onClick={() => {
+                        // カスタム設定のbuild値を取得するためにonSaveを経由
+                        // RecurrenceSelectorのonSaveが呼ばれないので直接editRecurrenceを使う
+                        saveRecurrence(t.id);
+                      }}
+                    >
+                      保存
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div style={{ marginTop: 6, display: 'flex', gap: 8 }}>
