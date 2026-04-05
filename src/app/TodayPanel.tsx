@@ -226,6 +226,11 @@ export default function TodayPanel({
                   ⏱{minutesToText(t.actualMin)}
                 </span>
               )}
+              {(todayActualMap[t.id] ?? 0) > 0 && (
+                <span style={{ color: '#f59e0b' }}>
+                  {' / '}🔥{minutesToText(todayActualMap[t.id])}
+                </span>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', flexShrink: 0, gap: 2 }}>
