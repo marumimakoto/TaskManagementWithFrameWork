@@ -3861,6 +3861,28 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             // todayMinMapを更新
             setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
           }}
+          onAddTodo={(title: string, estMin: number) => {
+            const newId: string = uid();
+            const now: number = Date.now();
+            const todo: Todo = {
+              id: newId,
+              title,
+              estMin,
+              actualMin: 0,
+              stuckHours: 0,
+              recurrence: 'carry',
+              started: false,
+              done: false,
+              sortOrder: todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) - 1 : 0,
+              createdAt: now,
+            };
+            setTodos((prev) => [todo, ...prev]);
+            fetch('/api/todos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id, todo }),
+            });
+          }}
           renderExpanded={(t: Todo) => renderExpandedContent(t)}
           onFieldEdit={(todoId: string, field: string, value: string) => {
             const updates: Record<string, unknown> = {};

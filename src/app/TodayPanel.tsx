@@ -17,6 +17,7 @@ export default function TodayPanel({
   todos,
   onToggleDone,
   onAddLog,
+  onAddTodo,
   todayActualMap = {},
   renderExpanded,
   onFieldEdit,
@@ -24,6 +25,7 @@ export default function TodayPanel({
   todos: Todo[];
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
+  onAddTodo?: (title: string, estMin: number) => void;
   todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
   onFieldEdit?: (todoId: string, field: string, value: string) => void;
@@ -56,6 +58,9 @@ export default function TodayPanel({
   }, [selectedIds]);
 
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [newTitle, setNewTitle] = useState<string>('');
+  const [newEstMin, setNewEstMin] = useState<string>('30');
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -341,13 +346,96 @@ export default function TodayPanel({
       )}
 
       {/* 未完了タスク一覧 */}
-      <h4 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: 'var(--muted)' }}>未完了タスクから選ぶ</h4>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', margin: 0 }}>未完了タスクから選ぶ</h4>
+        {onAddTodo && (
+          <button
+            type="button"
+            onClick={() => setShowAddModal(true)}
+            style={{
+              width: 28, height: 28, borderRadius: '50%', border: '1px solid #3b82f6',
+              background: '#3b82f6', color: 'white', fontSize: 18, lineHeight: 1,
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+            title="タスクを新規作成"
+          >
+            +
+          </button>
+        )}
+      </div>
       <div style={{ display: 'grid', gap: 4 }}>
         {undoneTodos.filter((t) => !selectedIds.has(t.id)).map((t) => renderTaskCard(t, false))}
         {undoneTodos.length === 0 && (
           <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>未完了タスクがありません</p>
         )}
       </div>
+
+      {/* タスク新規作成モーダル */}
+      {showAddModal && onAddTodo && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setShowAddModal(false)}
+        >
+          <div
+            style={{ background: 'var(--card-bg)', borderRadius: 12, padding: 20, width: '90%', maxWidth: 400 }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>タスクを新規作成</h3>
+            <div style={{ display: 'grid', gap: 10 }}>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="タスク名"
+                className={styles.input}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && newTitle.trim()) {
+                    onAddTodo(newTitle.trim(), parseInt(newEstMin, 10) || 30);
+                    setNewTitle('');
+                    setNewEstMin('30');
+                    setShowAddModal(false);
+                  }
+                }}
+              />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <label style={{ fontSize: 13, color: 'var(--muted)' }}>予定時間</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newEstMin}
+                  onChange={(e) => setNewEstMin(e.target.value)}
+                  className={styles.inputNarrow}
+                  style={{ width: 60 }}
+                />
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>分</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className={styles.iconBtn}
+                  onClick={() => setShowAddModal(false)}
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="button"
+                  className={styles.primaryBtn}
+                  disabled={!newTitle.trim()}
+                  onClick={() => {
+                    onAddTodo(newTitle.trim(), parseInt(newEstMin, 10) || 30);
+                    setNewTitle('');
+                    setNewEstMin('30');
+                    setShowAddModal(false);
+                  }}
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
