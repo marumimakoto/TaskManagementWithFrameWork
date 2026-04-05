@@ -2603,7 +2603,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             完了({legendCounts.done})
           </span>
           <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>
-            📋=予定 ⏱=累計実績
+            📋=予定 ⏱=累計実績 🔥=本日
           </span>
         </div>
         <div data-tutorial="view-mode-buttons" className={styles.viewModeButtons}>
@@ -3286,8 +3286,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     </span>
                   )}
                   {(todayMinMap[t.id] ?? 0) > 0 && (
-                    <span style={{ fontSize: 11, color: '#f59e0b', marginLeft: 4 }}>
-                      (本日{minutesToText(todayMinMap[t.id])})
+                    <span style={{ color: '#f59e0b' }}>
+                      {' / '}🔥{minutesToText(todayMinMap[t.id])}
                     </span>
                   )}
                 </div>
