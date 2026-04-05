@@ -22,6 +22,20 @@ type BucketCategory = {
   name: string;
 };
 
+/** GoogleカレンダーのイベントURLを生成する */
+function buildGoogleCalendarUrl(title: string, detail: string, deadlineYear: number | null): string {
+  const base: string = 'https://calendar.google.com/calendar/render?action=TEMPLATE';
+  const text: string = encodeURIComponent(title);
+  const details: string = encodeURIComponent(detail || '');
+  let dateParam: string = '';
+  if (deadlineYear) {
+    // 目標年の1/1を終日イベントとして設定
+    const dateStr: string = `${deadlineYear}0101`;
+    dateParam = `&dates=${dateStr}/${dateStr}`;
+  }
+  return `${base}&text=${text}&details=${details}${dateParam}`;
+}
+
 /** やりたいことリストをXMLに変換する */
 function buildExportXml(items: BucketItem[], categories: BucketCategory[]): string {
   const lines: string[] = ['<?xml version="1.0" encoding="UTF-8"?>', '<bucketList>'];
@@ -815,6 +829,15 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
                 )}
                 <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
                   <button onClick={() => startEdit(item)} className={styles.iconBtn} style={{ fontSize: 12, padding: '2px 8px' }}>編集</button>
+                  <a
+                    href={buildGoogleCalendarUrl(item.title, item.detail, item.deadlineYear)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12, padding: '2px 8px', textDecoration: 'none' }}
+                  >
+                    Googleカレンダーに追加
+                  </a>
                   <button onClick={() => { if (confirm('削除しますか？')) { deleteItem(item.id); } }} className={styles.dangerIconBtn} style={{ fontSize: 12, padding: '2px 8px' }}>削除</button>
                 </div>
               </div>
