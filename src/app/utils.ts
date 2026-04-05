@@ -67,9 +67,6 @@ export function uid(): string {
 export function minutesToText(min: number): string {
   const h: number = Math.floor(min / 60);
   const m: number = min % 60;
-  if (h <= 0) {
-    return `${m}分`;
-  }
   return `${h}:${String(m).padStart(2, '0')}`;
 }
 
