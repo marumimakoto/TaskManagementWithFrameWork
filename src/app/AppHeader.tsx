@@ -5,7 +5,7 @@ import type { AppUser } from './types';
 import styles from './page.module.css';
 
 /** タブの種別 */
-export type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
+export type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'analytics' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
 
 /** タブごとのタイトルと説明 */
 const TAB_INFO: Record<TabType, { title: string; description: string }> = {
@@ -15,6 +15,7 @@ const TAB_INFO: Record<TabType, { title: string; description: string }> = {
   'task-sets': { title: 'タスクセット', description: 'タスクのテンプレートを作成・管理' },
   matrix: { title: 'アイゼンハワーマトリクス', description: '緊急性と重要性でタスクを整理' },
   activity: { title: '作業記録', description: '作業ログ・統計・パレート分析' },
+  analytics: { title: '分析', description: '見積もり精度・バーンダウン・週次レビュー' },
   'category-stats': { title: 'カテゴリ別実績', description: 'カテゴリごとの達成率・作業時間・月別グラフ' },
   archived: { title: '削除したタスク', description: '削除したタスクの復元' },
   recurring: { title: '繰り返しタスク', description: '繰り返しルールの管理・達成率' },
@@ -141,6 +142,9 @@ export default function AppHeader({
             </button>
             <button type="button" className={`${styles.menuItem} ${activeTab === 'category-stats' ? styles.menuItemActive : ''}`} onClick={() => goTo('category-stats')}>
               カテゴリ別実績
+            </button>
+            <button type="button" className={`${styles.menuItem} ${activeTab === 'analytics' ? styles.menuItemActive : ''}`} onClick={() => goTo('analytics')}>
+              分析
             </button>
 
             {/* --- 日記グループ --- */}

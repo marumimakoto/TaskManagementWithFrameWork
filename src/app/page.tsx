@@ -44,6 +44,7 @@ const AdminPanel = dynamic(() => import('./AdminPanel'));
 const TodayPanel = dynamic(() => import('./TodayPanel'));
 const CalendarPanel = dynamic(() => import('./CalendarPanel'));
 const CategoryStatsPanel = dynamic(() => import('./CategoryStatsPanel'));
+const AnalyticsPanel = dynamic(() => import('./AnalyticsPanel'));
 
 /**
  * ページのルートコンポーネント
@@ -297,7 +298,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   const todayDayIndex: number = new Date().getDay();
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
-  const VALID_TABS: Set<string> = new Set(['tasks', 'today', 'calendar', 'task-sets', 'matrix', 'activity', 'category-stats', 'archived', 'recurring', 'diary-write', 'diary-view', 'diary-public', 'bucket-list', 'mypage', 'settings', 'help', 'bug-report', 'admin']);
+  const VALID_TABS: Set<string> = new Set(['tasks', 'today', 'calendar', 'task-sets', 'matrix', 'activity', 'analytics', 'category-stats', 'archived', 'recurring', 'diary-write', 'diary-view', 'diary-public', 'bucket-list', 'mypage', 'settings', 'help', 'bug-report', 'admin']);
   const [activeTab, setActiveTabRaw] = useState<TabType>(() => {
     try {
       const saved: string | null = localStorage.getItem('kiroku:activeTab');
@@ -3934,6 +3935,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
 
       {activeTab === 'category-stats' && (
         <CategoryStatsPanel user={user} />
+      )}
+
+      {activeTab === 'analytics' && (
+        <AnalyticsPanel user={user} />
       )}
 
       {activeTab === 'archived' && (
