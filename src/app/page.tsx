@@ -2681,34 +2681,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         </div>
       </div>
 
-      {/* ルートに戻すドロップゾーン（常にDOMに存在、ドラッグ中のみ表示） */}
-      <div
-        className={styles.rootDropZone}
-        style={{ display: dragId ? 'block' : 'none', background: dragOverId === '__root__' ? '#3b82f6' : undefined }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          setDragOverId('__root__');
-          setDragOverMode('between');
-        }}
-        onDragLeave={() => {
-          if (dragOverId === '__root__') {
-            setDragOverId(null);
-          }
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (dragId) {
-            changeParent(dragId, null);
-            setSortMode('manual');
-          }
-          isDraggingRef.current = false;
-          setDragId(null);
-          setDragOverId(null);
-          setDragOverMode(null);
-        }}
-      >
-        親との階層化を解除
-      </div>
+      {/* ルートに戻すドロップゾーン — 左サイドのunparentDropZoneで代替するため非表示 */}
 
       {/* カテゴリフィルター */}
       {todoCategories.length > 0 && (
