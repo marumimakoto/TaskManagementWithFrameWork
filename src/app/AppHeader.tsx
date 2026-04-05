@@ -5,7 +5,7 @@ import type { AppUser } from './types';
 import styles from './page.module.css';
 
 /** タブの種別 */
-export type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'activity' | 'analytics' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
+export type TabType = 'tasks' | 'today' | 'calendar' | 'task-sets' | 'matrix' | 'gtd' | 'timeblock' | 'activity' | 'analytics' | 'category-stats' | 'archived' | 'recurring' | 'diary-write' | 'diary-view' | 'diary-public' | 'bucket-list' | 'mypage' | 'settings' | 'help' | 'bug-report' | 'admin';
 
 /** タブごとのタイトルと説明 */
 const TAB_INFO: Record<TabType, { title: string; description: string }> = {
@@ -15,6 +15,8 @@ const TAB_INFO: Record<TabType, { title: string; description: string }> = {
   'task-sets': { title: 'タスクセット', description: 'タスクのテンプレートを作成・管理' },
   matrix: { title: 'アイゼンハワーマトリクス', description: '緊急性と重要性でタスクを整理' },
   activity: { title: '作業記録', description: '作業ログ・統計・パレート分析' },
+  gtd: { title: 'GTD', description: 'Getting Things Done — タスクの振り分け' },
+  timeblock: { title: 'タイムブロッキング', description: '時間帯にタスクを割り当てて1日を計画する' },
   analytics: { title: '分析', description: '見積もり精度・バーンダウン・週次レビュー' },
   'category-stats': { title: 'カテゴリ別実績', description: 'カテゴリごとの達成率・作業時間・月別グラフ' },
   archived: { title: '削除したタスク', description: '削除したタスクの復元' },
@@ -122,6 +124,12 @@ export default function AppHeader({
                 </button>
                 <button type="button" className={`${styles.menuSubItem} ${activeTab === 'matrix' ? styles.menuItemActive : ''}`} onClick={() => goToPro('matrix')}>
                   アイゼンハワーマトリクス {!isPro && '🔒'}
+                </button>
+                <button type="button" className={`${styles.menuSubItem} ${activeTab === 'gtd' ? styles.menuItemActive : ''}`} onClick={() => goTo('gtd')}>
+                  GTD
+                </button>
+                <button type="button" className={`${styles.menuSubItem} ${activeTab === 'timeblock' ? styles.menuItemActive : ''}`} onClick={() => goTo('timeblock')}>
+                  タイムブロッキング
                 </button>
                 <button type="button" className={`${styles.menuSubItem} ${activeTab === 'recurring' ? styles.menuItemActive : ''}`} onClick={() => goTo('recurring')}>
                   繰り返しタスク

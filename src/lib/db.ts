@@ -121,6 +121,7 @@ async function initializeTables(c: Client): Promise<void> {
       started INTEGER NOT NULL DEFAULT 0,
       done INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
+      gtd_status TEXT NOT NULL DEFAULT '',
       created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
     )`,
     `CREATE TABLE IF NOT EXISTS work_logs (
@@ -318,6 +319,7 @@ async function initializeTables(c: Client): Promise<void> {
     "ALTER TABLE archived_todos ADD COLUMN category TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE user_settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo'",
     "ALTER TABLE recurring_rules ADD COLUMN category TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE todos ADD COLUMN gtd_status TEXT NOT NULL DEFAULT ''",
   ];
   for (const sql of migrations) {
     try {

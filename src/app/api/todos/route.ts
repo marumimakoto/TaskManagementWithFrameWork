@@ -20,6 +20,7 @@ interface TodoRow {
   started: number;
   done: number;
   sort_order: number;
+  gtd_status: string;
   created_at: number;
 }
 
@@ -46,6 +47,7 @@ function rowToTodo(row: TodoRow): Todo {
     done: row.done === 1,
     createdAt: row.created_at,
     sortOrder: row.sort_order,
+    gtdStatus: row.gtd_status || '',
   };
 }
 

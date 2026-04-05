@@ -34,6 +34,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       started: row.started === 1,
       done: row.done === 1,
       sortOrder: row.sort_order,
+      gtdStatus: (row.gtd_status as string) || '',
       createdAt: row.created_at,
     }));
 

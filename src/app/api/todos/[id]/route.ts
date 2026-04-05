@@ -70,6 +70,10 @@ export async function PUT(
     fields.push('category = ?');
     values.push(updates.category);
   }
+  if (updates.gtdStatus !== undefined) {
+    fields.push('gtd_status = ?');
+    values.push(updates.gtdStatus);
+  }
   if (updates.started !== undefined) {
     fields.push('started = ?');
     values.push(updates.started ? 1 : 0);

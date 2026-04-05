@@ -47,6 +47,8 @@ export type Todo = {
   done: boolean;
   /** 表示順（小さいほど上） */
   sortOrder: number;
+  /** GTDステータス（空=未整理, next_action, waiting, someday） */
+  gtdStatus?: string;
   /** 作成日時（ミリ秒タイムスタンプ） */
   createdAt?: number;
 };
