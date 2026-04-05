@@ -2851,6 +2851,10 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                 if (longPressTimerRef.current) {
                   clearTimeout(longPressTimerRef.current);
                 }
+                // 長押し待機中のスクロールを即座に抑制
+                document.body.style.overflow = 'hidden';
+                document.body.style.touchAction = 'none';
+
                 longPressTimerRef.current = setTimeout(() => {
                   // 長押し成立 → ドラッグモード開始
                   setTouchDragId(t.id);
@@ -2859,9 +2863,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   touchStartRef.current = null;
                   setSwipeOffset((prev) => ({ ...prev, [t.id]: 0 }));
                   setSwipeAction((prev) => ({ ...prev, [t.id]: null }));
-                  // ページスクロールを無効化
-                  document.body.style.overflow = 'hidden';
-                  document.body.style.touchAction = 'none';
                   // 振動フィードバック（対応ブラウザのみ）
                   if (navigator.vibrate) {
                     navigator.vibrate(50);
@@ -2897,13 +2898,15 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                   return;
                 }
 
-                // 長押しタイマー中に動いたらキャンセル
+                // 長押しタイマー中に動いたらキャンセル + スクロール復元
                 if (longPressTimerRef.current) {
                   const dx: number = touch.clientX - (touchStartRef.current?.x ?? 0);
                   const dy: number = touch.clientY - (touchStartRef.current?.y ?? 0);
                   if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
                     clearTimeout(longPressTimerRef.current);
                     longPressTimerRef.current = null;
+                    document.body.style.overflow = '';
+                    document.body.style.touchAction = '';
                   }
                 }
 
