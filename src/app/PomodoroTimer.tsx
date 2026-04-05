@@ -516,15 +516,24 @@ export default function PomodoroTimer({
         <div className={styles.pomodoroTimer}>{display}</div>
         <div className={styles.pomodoroControls}>
           {overtime ? (
-            phase === 'work' ? (
-              <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
-                🔕 アラーム停止 → 休憩へ
+            <>
+              {phase === 'work' ? (
+                <button type="button" onClick={goToBreak} className={styles.primaryBtn}>
+                  🔕 アラーム停止 → 休憩へ
+                </button>
+              ) : (
+                <button type="button" onClick={goToWork} className={styles.primaryBtn}>
+                  🔕 アラーム停止 → 作業へ
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => { stopAlarmLoop(); cancelNotification(); }}
+                className={styles.iconBtn}
+              >
+                🔇 アラームだけ停止
               </button>
-            ) : (
-              <button type="button" onClick={goToWork} className={styles.primaryBtn}>
-                🔕 アラーム停止 → 作業へ
-              </button>
-            )
+            </>
           ) : !running ? (
             <button
               type="button"
