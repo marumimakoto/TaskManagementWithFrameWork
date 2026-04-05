@@ -2583,6 +2583,32 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         </div>
       )}
 
+      {/* 本日サマリー */}
+      {(() => {
+        const todayTotalMin: number = Object.values(todayMinMap).reduce((sum: number, v: number) => sum + v, 0);
+        const todayDoneCount: number = todos.filter((t) => {
+          if (!t.done || !t.lastWorkedAt) {
+            return false;
+          }
+          const d: Date = new Date(t.lastWorkedAt);
+          const now: Date = new Date();
+          return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+        }).length;
+        if (todayTotalMin === 0 && todayDoneCount === 0) {
+          return null;
+        }
+        return (
+          <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+            {todayTotalMin > 0 && (
+              <span>🔥 本日の作業: <strong style={{ color: '#f59e0b' }}>{minutesToText(todayTotalMin)}</strong></span>
+            )}
+            {todayDoneCount > 0 && (
+              <span>✅ 本日の達成: <strong style={{ color: '#22c55e' }}>{todayDoneCount}件</strong></span>
+            )}
+          </div>
+        );
+      })()}
+
       {/* 凡例 + 表示切替 */}
       <div className={styles.legendRow}>
         <div className={styles.legend}>
