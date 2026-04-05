@@ -2598,12 +2598,22 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           return null;
         }
         return (
-          <div style={{ display: 'flex', gap: 16, marginBottom: 8, fontSize: 13, color: 'var(--muted)' }}>
+          <div style={{
+            display: 'flex', gap: 24, marginBottom: 12, padding: '12px 16px',
+            background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10,
+            fontSize: 15,
+          }}>
             {todayTotalMin > 0 && (
-              <span>🔥 本日の作業: <strong style={{ color: '#f59e0b' }}>{minutesToText(todayTotalMin)}</strong></span>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>🔥 本日の作業</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{minutesToText(todayTotalMin)}</div>
+              </div>
             )}
             {todayDoneCount > 0 && (
-              <span>✅ 本日の達成: <strong style={{ color: '#22c55e' }}>{todayDoneCount}件</strong></span>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 2 }}>✅ 本日の達成</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: '#22c55e' }}>{todayDoneCount}件</div>
+              </div>
             )}
           </div>
         );
