@@ -3793,42 +3793,34 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'today' && (() => {
-        // 本日の日付文字列（YYYY-MM-DD）
-        const todayStr: string = new Date().toISOString().slice(0, 10);
-        // 作業ログから本日分の実績時間を正確に計算（contentから分数を抽出）
-        const todayActualMap: Record<string, number> = {};
-        for (const [todoId, logs] of Object.entries(workLogs)) {
-          const todayLogs = (logs as WorkLog[]).filter((l: WorkLog) => l.date === todayStr);
-          let totalMin: number = 0;
-          for (const l of todayLogs) {
-            const match: RegExpMatchArray | null = l.content.match(/\+?(\d+)分/);
-            if (match) {
-              totalMin += parseInt(match[1], 10);
-            }
-          }
-          if (totalMin > 0) {
-            todayActualMap[todoId] = totalMin;
-          }
-        }
         return (
         <TodayPanel
           todos={todos}
           onToggleDone={toggleDone}
-          todayActualMap={todayActualMap}
+          todayActualMap={todayMinMap}
           onAddLog={(id: string, minutes: number) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {
               return;
             }
             const newActual: number = target.actualMin + minutes;
+            const now: number = Date.now();
             setTodos((prev) =>
-              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: Date.now(), started: true } : t)),
+              prev.map((t) => (t.id === id ? { ...t, actualMin: newActual, lastWorkedAt: now, started: true } : t)),
             );
             fetch('/api/todos/' + id, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: Date.now(), started: 1 } }),
+              body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: now, started: 1 } }),
             });
+            // 作業ログにも記録
+            fetch('/api/todos/' + id + '/logs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ content: `+${minutes}分 作業` }),
+            });
+            // todayMinMapを更新
+            setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
           }}
           renderExpanded={(t: Todo) => renderExpandedContent(t)}
           onFieldEdit={(todoId: string, field: string, value: string) => {
