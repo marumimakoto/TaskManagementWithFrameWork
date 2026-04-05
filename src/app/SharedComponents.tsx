@@ -10,15 +10,22 @@ import styles from './page.module.css';
 export function DragHandle({
   onDragStart,
   onDragEnd,
+  onMouseDown,
 }: {
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: () => void;
+  onMouseDown?: (e: React.MouseEvent) => void;
 }): React.ReactElement {
   return (
     <div
       className={styles.dragHandle}
       draggable
-      onMouseDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        if (onMouseDown) {
+          onMouseDown(e);
+        }
+      }}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
       title="ドラッグして移動・階層化"
