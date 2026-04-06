@@ -11,7 +11,7 @@ interface TimeBlock {
   todoId: string | null;
 }
 
-const HOURS: number[] = Array.from({ length: 16 }, (_, i) => i + 6); // 6:00〜21:00
+// デフォルトのスロット範囲（設定から上書き可能）
 
 const STORAGE_KEY: string = 'kiroku:timeblocks';
 
@@ -22,10 +22,18 @@ const STORAGE_KEY: string = 'kiroku:timeblocks';
 export default function TimeBlockPanel({
   todos,
   userId,
+  startHour = 6,
+  endHour = 22,
 }: {
   todos: Todo[];
   userId: string;
+  startHour?: number;
+  endHour?: number;
 }): React.ReactElement {
+  const hours: number[] = useMemo(() => {
+    return Array.from({ length: endHour - startHour }, (_, i) => i + startHour);
+  }, [startHour, endHour]);
+
   const [blocks, setBlocks] = useState<TimeBlock[]>(() => {
     try {
       const todayStr: string = new Date().toISOString().slice(0, 10);
@@ -34,7 +42,7 @@ export default function TimeBlockPanel({
         return JSON.parse(raw) as TimeBlock[];
       }
     } catch { /* ignore */ }
-    return HOURS.map((hour: number): TimeBlock => ({ hour, todoId: null }));
+    return hours.map((hour: number): TimeBlock => ({ hour, todoId: null }));
   });
 
   const [dragTodoId, setDragTodoId] = useState<string | null>(null);
@@ -95,6 +103,30 @@ export default function TimeBlockPanel({
             {blocks.filter((b) => !b.todoId).length}時間
           </div>
         </div>
+        {blocks.some((b) => b.todoId) && (
+          <button
+            type="button"
+            onClick={() => {
+              const todayStr: string = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+              for (const b of blocks) {
+                if (!b.todoId) {
+                  continue;
+                }
+                const todo: Todo | undefined = todos.find((t) => t.id === b.todoId);
+                if (!todo) {
+                  continue;
+                }
+                const startTime: string = `${todayStr}T${String(b.hour).padStart(2, '0')}0000`;
+                const endTime: string = `${todayStr}T${String(b.hour + 1).padStart(2, '0')}0000`;
+                const url: string = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(todo.title)}&dates=${startTime}/${endTime}&details=${encodeURIComponent(todo.detail || '')}`;
+                window.open(url, '_blank');
+              }
+            }}
+            style={{ fontSize: 12, padding: '6px 12px', cursor: 'pointer', border: '1px solid var(--card-border)', borderRadius: 6, background: 'var(--card-bg)', color: 'var(--foreground)' }}
+          >
+            Googleカレンダーに一括追加
+          </button>
+        )}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
@@ -104,7 +136,7 @@ export default function TimeBlockPanel({
             タスク（ドラッグして配置）
           </h4>
           <div style={{ display: 'grid', gap: 4 }}>
-            {undoneTodos.filter((t) => !assignedIds.has(t.id)).map((t: Todo) => (
+            {undoneTodos.map((t: Todo) => (
               <div
                 key={t.id}
                 draggable
@@ -120,8 +152,8 @@ export default function TimeBlockPanel({
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>📋{minutesToText(t.estMin)}</div>
               </div>
             ))}
-            {undoneTodos.filter((t) => !assignedIds.has(t.id)).length === 0 && (
-              <p style={{ fontSize: 12, color: 'var(--muted)', padding: 8 }}>全タスク割り当て済み</p>
+            {undoneTodos.length === 0 && (
+              <p style={{ fontSize: 12, color: 'var(--muted)', padding: 8 }}>未完了タスクがありません</p>
             )}
           </div>
         </div>

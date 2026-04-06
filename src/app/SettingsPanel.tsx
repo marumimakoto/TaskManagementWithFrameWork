@@ -270,6 +270,37 @@ export default function SettingsPanel({
         </div>
       </section>
 
+      {/* タイムブロッキング */}
+      <section className={styles.settingsSection}>
+        <h3 className={styles.settingsSectionTitle}>タイムブロッキング</h3>
+        <div className={styles.settingsRow}>
+          <label className={styles.fieldLabel}>スロット範囲</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={localSettings.timeblockStart ?? 6}
+              onChange={(e) => updateSetting({ timeblockStart: parseInt(e.target.value, 10) })}
+              className={styles.input}
+              style={{ width: 80 }}
+            >
+              {Array.from({ length: 24 }, (_, i) => (
+                <option key={i} value={i}>{i}:00</option>
+              ))}
+            </select>
+            <span>〜</span>
+            <select
+              value={localSettings.timeblockEnd ?? 22}
+              onChange={(e) => updateSetting({ timeblockEnd: parseInt(e.target.value, 10) })}
+              className={styles.input}
+              style={{ width: 80 }}
+            >
+              {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
+                <option key={h} value={h}>{h}:00</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </section>
+
       {/* Welcomeメッセージ */}
       <section className={styles.settingsSection}>
         <h3 className={styles.settingsSectionTitle}>Welcomeメッセージ</h3>

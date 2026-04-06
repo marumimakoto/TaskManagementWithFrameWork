@@ -17,6 +17,8 @@ interface SettingsRow {
   pomodoro_work: number;
   pomodoro_break: number;
   timezone: string;
+  timeblock_start: number;
+  timeblock_end: number;
 }
 
 /**
@@ -35,6 +37,8 @@ function rowToSettings(row: SettingsRow): UserSettings {
     pomodoroWork: row.pomodoro_work ?? 25,
     pomodoroBreak: row.pomodoro_break ?? 5,
     timezone: row.timezone ?? 'Asia/Tokyo',
+    timeblockStart: row.timeblock_start ?? 6,
+    timeblockEnd: row.timeblock_end ?? 22,
   };
 }
 
@@ -72,8 +76,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
 
   const db = await getDb();
   await db.run(`
-    INSERT INTO user_settings (user_id, dark_mode, font_size, font_family, butler_avatar, butler_prompt, butler_max_chars, welcome_tone, show_butler, pomodoro_work, pomodoro_break, timezone)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO user_settings (user_id, dark_mode, font_size, font_family, butler_avatar, butler_prompt, butler_max_chars, welcome_tone, show_butler, pomodoro_work, pomodoro_break, timezone, timeblock_start, timeblock_end)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(user_id) DO UPDATE SET
       dark_mode = excluded.dark_mode,
       font_size = excluded.font_size,
@@ -85,7 +89,9 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
       show_butler = excluded.show_butler,
       pomodoro_work = excluded.pomodoro_work,
       pomodoro_break = excluded.pomodoro_break,
-      timezone = excluded.timezone
+      timezone = excluded.timezone,
+      timeblock_start = excluded.timeblock_start,
+      timeblock_end = excluded.timeblock_end
   `,
     userId,
     settings.darkMode ? 1 : 0,
@@ -99,6 +105,8 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
     settings.pomodoroWork ?? 25,
     settings.pomodoroBreak ?? 5,
     settings.timezone ?? 'Asia/Tokyo',
+    settings.timeblockStart ?? 6,
+    settings.timeblockEnd ?? 22,
   );
 
   return NextResponse.json({ ok: true });

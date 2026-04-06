@@ -221,7 +221,9 @@ async function initializeTables(c: Client): Promise<void> {
       show_butler INTEGER NOT NULL DEFAULT 1,
       pomodoro_work INTEGER NOT NULL DEFAULT 25,
       pomodoro_break INTEGER NOT NULL DEFAULT 5,
-      timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo'
+      timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo',
+      timeblock_start INTEGER NOT NULL DEFAULT 6,
+      timeblock_end INTEGER NOT NULL DEFAULT 22
     )`,
     `CREATE TABLE IF NOT EXISTS bug_reports (
       id TEXT PRIMARY KEY,
@@ -320,6 +322,8 @@ async function initializeTables(c: Client): Promise<void> {
     "ALTER TABLE user_settings ADD COLUMN timezone TEXT NOT NULL DEFAULT 'Asia/Tokyo'",
     "ALTER TABLE recurring_rules ADD COLUMN category TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE todos ADD COLUMN gtd_status TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE user_settings ADD COLUMN timeblock_start INTEGER NOT NULL DEFAULT 6",
+    "ALTER TABLE user_settings ADD COLUMN timeblock_end INTEGER NOT NULL DEFAULT 22",
   ];
   for (const sql of migrations) {
     try {

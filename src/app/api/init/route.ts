@@ -54,6 +54,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       showButler: settingsRow.show_butler !== 0,
       pomodoroWork: settingsRow.pomodoro_work ?? 25,
       pomodoroBreak: settingsRow.pomodoro_break ?? 5,
+      timezone: (settingsRow as Record<string, unknown>).timezone as string ?? 'Asia/Tokyo',
+      timeblockStart: (settingsRow as Record<string, unknown>).timeblock_start as number ?? 6,
+      timeblockEnd: (settingsRow as Record<string, unknown>).timeblock_end as number ?? 22,
     } : null;
 
     // 購入状態（管理者チェック含む）

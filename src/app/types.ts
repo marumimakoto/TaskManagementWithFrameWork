@@ -134,6 +134,10 @@ export type UserSettings = {
   pomodoroBreak: number;
   /** タイムゾーン（IANA形式、例: 'Asia/Tokyo'） */
   timezone: string;
+  /** タイムブロック開始時刻（0-23） */
+  timeblockStart: number;
+  /** タイムブロック終了時刻（1-24） */
+  timeblockEnd: number;
 };
 
 /** UserSettingsのデフォルト値 */
@@ -149,6 +153,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   pomodoroWork: 25,
   pomodoroBreak: 5,
   timezone: 'Asia/Tokyo',
+  timeblockStart: 6,
+  timeblockEnd: 22,
 };
 
 /**

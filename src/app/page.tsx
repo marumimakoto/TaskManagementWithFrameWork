@@ -316,7 +316,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     try { localStorage.setItem('kiroku:activeTab', tab); } catch { /* ignore */ }
   }
   const [menuOpen, setMenuOpen] = useState<boolean>(false);
-  const [diaryMenuOpen, setDiaryMenuOpen] = useState<boolean>(false);
+  // diaryMenuOpen は AppHeader に移管済み
   const [tutorialHint, setTutorialHint] = useState<string | null>(null);
   const [tutorialTarget, setTutorialTarget] = useState<string | null>(null);
   const [tutorialPos, setTutorialPos] = useState<{ top: number; left: number } | null>(null);
@@ -3938,7 +3938,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       )}
 
       {activeTab === 'timeblock' && (
-        <TimeBlockPanel todos={todos} userId={user.id} />
+        <TimeBlockPanel todos={todos} userId={user.id} startHour={settings.timeblockStart ?? 6} endHour={settings.timeblockEnd ?? 22} />
       )}
 
       {activeTab === 'gtd' && (
