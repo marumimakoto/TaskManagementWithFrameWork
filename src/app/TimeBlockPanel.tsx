@@ -147,6 +147,11 @@ export default function TimeBlockPanel({
             type="button"
             onClick={() => {
               const todayStr: string = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+              const lines: string[] = [
+                'BEGIN:VCALENDAR',
+                'VERSION:2.0',
+                'PRODID:-//Kiroku//TimeBlock//EN',
+              ];
               for (const b of blocks) {
                 if (!b.todoId) {
                   continue;
@@ -155,15 +160,32 @@ export default function TimeBlockPanel({
                 if (!todo) {
                   continue;
                 }
-                const startTime: string = `${todayStr}T${String(b.hour).padStart(2, '0')}0000`;
-                const endTime: string = `${todayStr}T${String(b.hour + 1).padStart(2, '0')}0000`;
-                const url: string = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(todo.title)}&dates=${startTime}/${endTime}&details=${encodeURIComponent(todo.detail || '')}`;
-                window.open(url, '_blank');
+                const uid: string = `${todayStr}-${b.hour}-${b.todoId}@kiroku`;
+                const dtStart: string = `${todayStr}T${String(b.hour).padStart(2, '0')}0000`;
+                const dtEnd: string = `${todayStr}T${String(b.hour + 1).padStart(2, '0')}0000`;
+                lines.push('BEGIN:VEVENT');
+                lines.push(`UID:${uid}`);
+                lines.push(`DTSTART:${dtStart}`);
+                lines.push(`DTEND:${dtEnd}`);
+                lines.push(`SUMMARY:${todo.title.replace(/[,;\\]/g, ' ')}`);
+                if (todo.detail) {
+                  lines.push(`DESCRIPTION:${todo.detail.replace(/\n/g, '\\n').replace(/[,;\\]/g, ' ')}`);
+                }
+                lines.push('END:VEVENT');
               }
+              lines.push('END:VCALENDAR');
+              const icsContent: string = lines.join('\r\n');
+              const blob: Blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+              const url: string = URL.createObjectURL(blob);
+              const a: HTMLAnchorElement = document.createElement('a');
+              a.href = url;
+              a.download = `timeblock-${todayStr}.ics`;
+              a.click();
+              URL.revokeObjectURL(url);
             }}
             style={{ fontSize: 12, padding: '6px 12px', cursor: 'pointer', border: '1px solid var(--card-border)', borderRadius: 6, background: 'var(--card-bg)', color: 'var(--foreground)' }}
           >
-            Googleカレンダーに一括追加
+            カレンダーに一括追加（.ics）
           </button>
         )}
       </div>
