@@ -47,6 +47,20 @@ export default function TimeBlockPanel({
     return hours.map((hour: number): TimeBlock => ({ hour, todoId: null }));
   });
 
+  // startHour/endHour が変わったらブロックを再生成（既存の割り当てを保持）
+  useEffect(() => {
+    setBlocks((prev) => {
+      const existing: Map<number, string | null> = new Map();
+      for (const b of prev) {
+        existing.set(b.hour, b.todoId);
+      }
+      return hours.map((hour: number): TimeBlock => ({
+        hour,
+        todoId: existing.get(hour) ?? null,
+      }));
+    });
+  }, [startHour, endHour]);
+
   const [dragTodoId, setDragTodoId] = useState<string | null>(null);
 
   const undoneTodos: Todo[] = useMemo(() => {
