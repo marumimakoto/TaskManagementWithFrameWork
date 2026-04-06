@@ -22,6 +22,7 @@ import ButlerAvatar from './ButlerAvatar';
 import AppHeader from './AppHeader';
 import type { TabType } from './AppHeader';
 import PomodoroTimer from './PomodoroTimer';
+import RecurrenceSelector from './RecurrenceSelector';
 import { DragHandle, MoveButtonBar, DeleteButton } from './SharedComponents';
 import { TUTORIAL_STEPS } from './HelpPanel';
 import { useIsMobile } from './useIsMobile';
@@ -2555,18 +2556,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               className={styles.input}
             />
             <label className={styles.fieldLabel} style={{ marginTop: 12 }}>繰り返し</label>
-            <select
+            <RecurrenceSelector
               value={mode}
-              onChange={(e) => setMode(e.target.value)}
-              className={styles.input}
-            >
-              <option value="carry">繰り返さない</option>
-              <option value="day">毎日</option>
-              <option value="week:weekday">毎週平日（月〜金）</option>
-              <option value={`week:${todayDayKey}`}>毎週{todayDayName}曜日</option>
-              <option value="month:same-date">毎月同じ日</option>
-              <option value="year">毎年同じ日</option>
-            </select>
+              onChange={(v) => setMode(v)}
+              showSaveButton={false}
+            />
             <label className={styles.fieldLabel} style={{ marginTop: 12 }}>締切（任意）</label>
             <input
               type="date"
