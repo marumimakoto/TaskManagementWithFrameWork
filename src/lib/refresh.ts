@@ -206,8 +206,13 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
 
   let addedCount: number = 0;
 
+  console.log('[refresh] rules:', rules.map((r) => ({ id: r.id, title: r.title, recurrence: r.recurrence })));
+  console.log('[refresh] existingTitles:', [...existingTitles]);
+
   for (const rule of rules) {
-    if (!shouldAddToday(rule.recurrence)) {
+    const shouldAdd: boolean = shouldAddToday(rule.recurrence);
+    console.log(`[refresh] rule "${rule.title}" recurrence="${rule.recurrence}" shouldAddToday=${shouldAdd} existsUndone=${existingTitles.has(rule.title)}`);
+    if (!shouldAdd) {
       continue;
     }
     // 同名タスクが未完了で存在する場合はタスク生成をスキップ

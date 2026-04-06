@@ -29,10 +29,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const today: string = todayStr(timezone);
 
+  // デバッグ: last_refresh_dateを確認
+  const userRow = await db.get<{ last_refresh_date: string | null }>('SELECT last_refresh_date FROM users WHERE id = ?', userId);
+  console.log(`[refresh-api] userId=${userId} today=${today} timezone=${timezone} lastRefresh=${userRow?.last_refresh_date}`);
+
   const result = await refreshUserTodos(db, userId, today);
 
   if (result === null) {
-    return NextResponse.json({ refreshed: false, reason: 'already refreshed today' });
+    return NextResponse.json({ refreshed: false, reason: 'already refreshed today', today, lastRefresh: userRow?.last_refresh_date });
   }
 
   return NextResponse.json({

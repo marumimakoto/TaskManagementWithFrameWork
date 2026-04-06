@@ -562,7 +562,8 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId: user.id }),
         });
-        const refreshData: { refreshed: boolean; archivedCount?: number; addedCount?: number } = await refreshRes.json();
+        const refreshData = await refreshRes.json();
+        console.log('[refresh-result]', refreshData);
         if (refreshData.refreshed) {
           log('refresh', { archived: refreshData.archivedCount, added: refreshData.addedCount });
         }
