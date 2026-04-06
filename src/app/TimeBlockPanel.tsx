@@ -15,6 +15,52 @@ interface TimeBlock {
 
 const STORAGE_KEY: string = 'kiroku:timeblocks';
 
+/** タイムブロックからICSファイルの内容を生成する */
+function buildIcsContent(blockList: TimeBlock[], todoList: Todo[]): string {
+  const todayStr: string = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const lines: string[] = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Kiroku//TimeBlock//EN',
+  ];
+  for (const b of blockList) {
+    if (!b.todoId) {
+      continue;
+    }
+    const todo: Todo | undefined = todoList.find((t) => t.id === b.todoId);
+    if (!todo) {
+      continue;
+    }
+    const uid: string = `${todayStr}-${b.hour}-${b.todoId}@kiroku`;
+    const dtStart: string = `${todayStr}T${String(b.hour).padStart(2, '0')}0000`;
+    const dtEnd: string = `${todayStr}T${String(b.hour + 1).padStart(2, '0')}0000`;
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${uid}`);
+    lines.push(`DTSTART:${dtStart}`);
+    lines.push(`DTEND:${dtEnd}`);
+    lines.push(`SUMMARY:${todo.title.replace(/[,;\\]/g, ' ')}`);
+    if (todo.detail) {
+      lines.push(`DESCRIPTION:${todo.detail.replace(/\n/g, '\\n').replace(/[,;\\]/g, ' ')}`);
+    }
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+/** ICSファイルをダウンロードする */
+function downloadIcs(blockList: TimeBlock[], todoList: Todo[]): void {
+  const content: string = buildIcsContent(blockList, todoList);
+  const todayStr: string = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const blob: Blob = new Blob([content], { type: 'text/calendar;charset=utf-8' });
+  const url: string = URL.createObjectURL(blob);
+  const a: HTMLAnchorElement = document.createElement('a');
+  a.href = url;
+  a.download = `timeblock-${todayStr}.ics`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 /**
  * タイムブロッキングパネル
  * 1時間単位でタスクを時間帯に割り当てる
@@ -142,52 +188,25 @@ export default function TimeBlockPanel({
             </select>
           </div>
         )}
-        {blocks.some((b) => b.todoId) && (
+        {blocks.some((b) => b.todoId) && (<>
+          <button
+            type="button"
+            onClick={() => downloadIcs(blocks, todos)}
+            style={{ fontSize: 12, padding: '6px 12px', cursor: 'pointer', border: '1px solid var(--card-border)', borderRadius: 6, background: 'var(--card-bg)', color: 'var(--foreground)' }}
+          >
+            .icsダウンロード
+          </button>
           <button
             type="button"
             onClick={() => {
-              const todayStr: string = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-              const lines: string[] = [
-                'BEGIN:VCALENDAR',
-                'VERSION:2.0',
-                'PRODID:-//Kiroku//TimeBlock//EN',
-              ];
-              for (const b of blocks) {
-                if (!b.todoId) {
-                  continue;
-                }
-                const todo: Todo | undefined = todos.find((t) => t.id === b.todoId);
-                if (!todo) {
-                  continue;
-                }
-                const uid: string = `${todayStr}-${b.hour}-${b.todoId}@kiroku`;
-                const dtStart: string = `${todayStr}T${String(b.hour).padStart(2, '0')}0000`;
-                const dtEnd: string = `${todayStr}T${String(b.hour + 1).padStart(2, '0')}0000`;
-                lines.push('BEGIN:VEVENT');
-                lines.push(`UID:${uid}`);
-                lines.push(`DTSTART:${dtStart}`);
-                lines.push(`DTEND:${dtEnd}`);
-                lines.push(`SUMMARY:${todo.title.replace(/[,;\\]/g, ' ')}`);
-                if (todo.detail) {
-                  lines.push(`DESCRIPTION:${todo.detail.replace(/\n/g, '\\n').replace(/[,;\\]/g, ' ')}`);
-                }
-                lines.push('END:VEVENT');
-              }
-              lines.push('END:VCALENDAR');
-              const icsContent: string = lines.join('\r\n');
-              const blob: Blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
-              const url: string = URL.createObjectURL(blob);
-              const a: HTMLAnchorElement = document.createElement('a');
-              a.href = url;
-              a.download = `timeblock-${todayStr}.ics`;
-              a.click();
-              URL.revokeObjectURL(url);
+              downloadIcs(blocks, todos);
+              window.open('https://calendar.google.com/calendar/r/settings/export', '_blank');
             }}
             style={{ fontSize: 12, padding: '6px 12px', cursor: 'pointer', border: '1px solid var(--card-border)', borderRadius: 6, background: 'var(--card-bg)', color: 'var(--foreground)' }}
           >
-            カレンダーに一括追加（.ics）
+            Googleカレンダーに登録
           </button>
-        )}
+        </>)}
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
