@@ -2,10 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import styles from './page.module.css';
-
-/** 曜日のキーと日本語名 */
-const DAY_KEYS: string[] = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
-const DAY_NAMES: string[] = ['日', '月', '火', '水', '木', '金', '土'];
+import { REC_CARRY, REC_DAILY, REC_WEEKDAY, REC_MONTHLY, REC_YEARLY, REC_CUSTOM_PREFIX, DAY_KEYS, DAY_NAMES } from '@/lib/recurrence';
 
 /**
  * 繰り返し設定の選択UIコンポーネント
@@ -26,21 +23,21 @@ export default function RecurrenceSelector({
   const todayDayKey: string = DAY_KEYS[todayDayIndex];
   const todayDayName: string = DAY_NAMES[todayDayIndex];
 
-  const [customMode, setCustomMode] = useState<boolean>(value === 'custom' || value.startsWith('custom:'));
+  const [customMode, setCustomMode] = useState<boolean>(value === 'custom' || value.startsWith(REC_CUSTOM_PREFIX));
   const [customInterval, setCustomInterval] = useState<string>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       return value.split(':')[1] || '1';
     }
     return '1';
   });
   const [customUnit, setCustomUnit] = useState<string>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       return value.split(':')[2] || 'week';
     }
     return 'week';
   });
   const [customWeekDays, setCustomWeekDays] = useState<string[]>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       const parts: string[] = value.split(':');
       if (parts[2] === 'week' && parts[3]) {
         return parts[3].split(',');
@@ -49,7 +46,7 @@ export default function RecurrenceSelector({
     return ['mon'];
   });
   const [customMonthMode, setCustomMonthMode] = useState<'date' | 'weekday'>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       const parts: string[] = value.split(':');
       if (parts[2] === 'month' && parts[3] === 'nth') {
         return 'weekday';
@@ -58,7 +55,7 @@ export default function RecurrenceSelector({
     return 'date';
   });
   const [customMonthDay, setCustomMonthDay] = useState<string>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       const parts: string[] = value.split(':');
       if (parts[2] === 'month' && parts[3] === 'date') {
         return parts[4] || '1';
@@ -67,7 +64,7 @@ export default function RecurrenceSelector({
     return '1';
   });
   const [customMonthNth, setCustomMonthNth] = useState<string>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       const parts: string[] = value.split(':');
       if (parts[2] === 'month' && parts[3] === 'nth') {
         return parts[4] || '1';
@@ -76,7 +73,7 @@ export default function RecurrenceSelector({
     return '1';
   });
   const [customMonthNthDay, setCustomMonthNthDay] = useState<string>(() => {
-    if (value.startsWith('custom:')) {
+    if (value.startsWith(REC_CUSTOM_PREFIX)) {
       const parts: string[] = value.split(':');
       if (parts[2] === 'month' && parts[3] === 'nth') {
         return parts[5] || 'mon';
@@ -114,12 +111,12 @@ export default function RecurrenceSelector({
   }, [customMode, customInterval, customUnit, customWeekDays, customMonthMode, customMonthDay, customMonthNth, customMonthNthDay]);
 
   const presets: { value: string; label: string }[] = [
-    { value: 'carry', label: '繰り返さない' },
-    { value: 'day', label: '毎日' },
-    { value: 'week:weekday', label: '毎週平日' },
+    { value: REC_CARRY, label: '繰り返さない' },
+    { value: REC_DAILY, label: '毎日' },
+    { value: REC_WEEKDAY, label: '毎週平日' },
     { value: `week:${todayDayKey}`, label: `毎週${todayDayName}曜` },
-    { value: 'month:same-date', label: '毎月' },
-    { value: 'year', label: '毎年' },
+    { value: REC_MONTHLY, label: '毎月' },
+    { value: REC_YEARLY, label: '毎年' },
     { value: 'custom', label: 'カスタム' },
   ];
 

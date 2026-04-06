@@ -1,5 +1,6 @@
 import { getDb, Db } from '@/lib/db';
 import crypto from 'crypto';
+import { REC_CARRY, REC_DAILY, REC_WEEKDAY, REC_MONTHLY, REC_YEARLY, DAY_KEY_TO_NUMBER, getWeekDayKey } from '@/lib/recurrence';
 
 interface TodoRow {
   id: string;
@@ -67,29 +68,29 @@ export function shouldAddToday(recurrence: string, timezone: string = 'Asia/Toky
   const month: number = parseInt(parts.month, 10) - 1; // 0-based
   const year: number = parseInt(parts.year, 10);
 
-  // 'daily' / 'day' いずれも毎日
-  if (recurrence === 'daily' || recurrence === 'day') {
+  // 毎日（'day' が正規値、'daily' はレガシー互換）
+  if (recurrence === REC_DAILY || recurrence === 'daily') {
     return true;
   }
-  // 'weekly' = 毎週月曜（レガシー）、'week:weekday' = 毎週平日、'week:XXX' = 毎週特定曜日
+  // 毎週平日
+  if (recurrence === REC_WEEKDAY) {
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
+  }
+  // 毎週特定曜日（'week:mon' 等）
+  const weekDayKey: string | null = getWeekDayKey(recurrence);
+  if (weekDayKey !== null) {
+    return dayOfWeek === (DAY_KEY_TO_NUMBER[weekDayKey] ?? -1);
+  }
+  // レガシー: 'weekly' = 毎週月曜
   if (recurrence === 'weekly') {
     return dayOfWeek === 1;
   }
-  if (recurrence === 'week:weekday') {
-    return dayOfWeek >= 1 && dayOfWeek <= 5;
-  }
-  if (recurrence.startsWith('week:') && !recurrence.startsWith('week:weekday')) {
-    // 'week:mon', 'week:tue' など
-    const dayKey: string = recurrence.split(':')[1];
-    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
-    return dayOfWeek === (dayMap[dayKey] ?? -1);
-  }
-  // 'monthly' / 'month:same-date' = 毎月同じ日
-  if (recurrence === 'monthly' || recurrence === 'month:same-date') {
+  // 毎月（'month:same-date' が正規値、'monthly' はレガシー互換）
+  if (recurrence === REC_MONTHLY || recurrence === 'monthly') {
     return dayOfMonth === 1;
   }
-  // 'yearly' / 'year' = 毎年1/1
-  if (recurrence === 'yearly' || recurrence === 'year') {
+  // 毎年（'year' が正規値、'yearly' はレガシー互換）
+  if (recurrence === REC_YEARLY || recurrence === 'yearly') {
     return month === 0 && dayOfMonth === 1;
   }
 
