@@ -3844,6 +3844,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           todos={todos}
           onToggleDone={toggleDone}
           todayActualMap={todayMinMap}
+          userId={user.id}
+          timeblockStart={settings.timeblockStart ?? 6}
+          timeblockEnd={settings.timeblockEnd ?? 22}
           onAddLog={(id: string, minutes: number) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {

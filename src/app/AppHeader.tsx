@@ -128,9 +128,6 @@ export default function AppHeader({
                 <button type="button" className={`${styles.menuSubItem} ${activeTab === 'gtd' ? styles.menuItemActive : ''}`} onClick={() => goTo('gtd')}>
                   GTD
                 </button>
-                <button type="button" className={`${styles.menuSubItem} ${activeTab === 'timeblock' ? styles.menuItemActive : ''}`} onClick={() => goTo('timeblock')}>
-                  タイムブロッキング
-                </button>
                 <button type="button" className={`${styles.menuSubItem} ${activeTab === 'recurring' ? styles.menuItemActive : ''}`} onClick={() => goTo('recurring')}>
                   繰り返しタスク
                 </button>

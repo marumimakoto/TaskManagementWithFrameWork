@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Todo } from './types';
 import { minutesToText, formatDeadline } from './utils';
 import styles from './page.module.css';
+import TimeBlockPanel from './TimeBlockPanel';
 
 const TODAY_IDS_KEY: string = 'kiroku:today-ids';
 const TODAY_DATE_KEY: string = 'kiroku:today-date';
@@ -21,6 +22,9 @@ export default function TodayPanel({
   todayActualMap = {},
   renderExpanded,
   onFieldEdit,
+  userId,
+  timeblockStart = 6,
+  timeblockEnd = 22,
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
@@ -29,6 +33,9 @@ export default function TodayPanel({
   todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
   onFieldEdit?: (todoId: string, field: string, value: string) => void;
+  userId?: string;
+  timeblockStart?: number;
+  timeblockEnd?: number;
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     try {
@@ -58,6 +65,7 @@ export default function TodayPanel({
   }, [selectedIds]);
 
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
+  const [subView, setSubView] = useState<'tasks' | 'timeblock'>('tasks');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [newTitle, setNewTitle] = useState<string>('');
   const [newEstMin, setNewEstMin] = useState<string>('30');
@@ -311,6 +319,45 @@ export default function TodayPanel({
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      {/* サブビュー切替 */}
+      <div style={{ display: 'flex', gap: 0, marginBottom: 16 }}>
+        <button
+          type="button"
+          onClick={() => setSubView('tasks')}
+          style={{
+            flex: 1, padding: '10px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid var(--card-border)',
+            borderBottom: subView === 'tasks' ? '3px solid #3b82f6' : '1px solid var(--card-border)',
+            background: subView === 'tasks' ? 'var(--card-bg)' : 'transparent',
+            color: subView === 'tasks' ? '#3b82f6' : 'var(--muted)',
+            borderRadius: '8px 0 0 0',
+          }}
+        >
+          タスク選択
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubView('timeblock')}
+          style={{
+            flex: 1, padding: '10px 0', fontSize: 14, fontWeight: 600, cursor: 'pointer',
+            border: '1px solid var(--card-border)', borderLeft: 'none',
+            borderBottom: subView === 'timeblock' ? '3px solid #f59e0b' : '1px solid var(--card-border)',
+            background: subView === 'timeblock' ? 'var(--card-bg)' : 'transparent',
+            color: subView === 'timeblock' ? '#f59e0b' : 'var(--muted)',
+            borderRadius: '0 8px 0 0',
+          }}
+        >
+          タイムブロック
+        </button>
+      </div>
+
+      {/* タイムブロックビュー */}
+      {subView === 'timeblock' && userId && (
+        <TimeBlockPanel todos={todos} userId={userId} startHour={timeblockStart} endHour={timeblockEnd} />
+      )}
+
+      {/* タスク選択ビュー */}
+      {subView === 'tasks' && <>
       {/* 合計サマリー */}
       <div style={{ marginBottom: 16, padding: 16, background: 'var(--card-bg)', borderRadius: 12, border: '1px solid var(--card-border)' }}>
         <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>今日やること ({selectedTodos.length}件)</h3>
@@ -369,6 +416,8 @@ export default function TodayPanel({
           <p style={{ color: 'var(--muted)', textAlign: 'center', padding: 24 }}>未完了タスクがありません</p>
         )}
       </div>
+
+      </>}
 
       {/* タスク新規作成モーダル */}
       {showAddModal && onAddTodo && (
