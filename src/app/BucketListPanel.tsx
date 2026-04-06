@@ -604,7 +604,7 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
                   onClick={() => setShowCategoryManager(!showCategoryManager)}
                   style={{ fontSize: 12, color: '#3b82f6', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
-                  {showCategoryManager ? '閉じる' : '管理'}
+                  {showCategoryManager ? '閉じる' : 'カテゴリ管理'}
                 </button>
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
