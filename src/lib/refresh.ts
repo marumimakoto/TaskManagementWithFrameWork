@@ -67,19 +67,29 @@ export function shouldAddToday(recurrence: string, timezone: string = 'Asia/Toky
   const month: number = parseInt(parts.month, 10) - 1; // 0-based
   const year: number = parseInt(parts.year, 10);
 
-  if (recurrence === 'daily') {
+  // 'daily' / 'day' いずれも毎日
+  if (recurrence === 'daily' || recurrence === 'day') {
     return true;
   }
+  // 'weekly' = 毎週月曜（レガシー）、'week:weekday' = 毎週平日、'week:XXX' = 毎週特定曜日
   if (recurrence === 'weekly') {
-    // 毎週月曜日（デフォルト）
     return dayOfWeek === 1;
   }
-  if (recurrence === 'monthly') {
-    // 毎月1日（デフォルト）
+  if (recurrence === 'week:weekday') {
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
+  }
+  if (recurrence.startsWith('week:') && !recurrence.startsWith('week:weekday')) {
+    // 'week:mon', 'week:tue' など
+    const dayKey: string = recurrence.split(':')[1];
+    const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+    return dayOfWeek === (dayMap[dayKey] ?? -1);
+  }
+  // 'monthly' / 'month:same-date' = 毎月同じ日
+  if (recurrence === 'monthly' || recurrence === 'month:same-date') {
     return dayOfMonth === 1;
   }
-  if (recurrence === 'yearly') {
-    // 毎年1/1（デフォルト）
+  // 'yearly' / 'year' = 毎年1/1
+  if (recurrence === 'yearly' || recurrence === 'year') {
     return month === 0 && dayOfMonth === 1;
   }
 
