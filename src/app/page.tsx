@@ -668,6 +668,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   }
 
   const [actualInputs, setActualInputs] = useState<Record<string, string>>({});
+  const [actualMemoInputs, setActualMemoInputs] = useState<Record<string, string>>({});
   const [actualDateInputs, setActualDateInputs] = useState<Record<string, string>>({});
 
   // Add form
@@ -1279,16 +1280,14 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       body: JSON.stringify({ updates }),
     });
     // 作業ログにも記録（メモがあれば追加）
-    const memo: string = logInput.trim();
+    const memo: string = (actualMemoInputs[id] ?? '').trim();
     const logContent: string = memo ? `+${addMin}分 ${memo}` : `+${addMin}分 作業`;
     fetch('/api/todos/' + id + '/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: logContent, date: dateStr || undefined }),
     });
-    if (memo) {
-      setLogInput('');
-    }
+    setActualMemoInputs((prev) => ({ ...prev, [id]: '' }));
     // 今日分の場合、todayMinMapを更新
     if (!dateStr) {
       setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + addMin }));
@@ -3461,7 +3460,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       setActualInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
                     }
                     onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !t.done) {
+                      if (e.key === 'Enter') {
                         e.preventDefault();
                         addLog(t.id);
                       }
@@ -3469,6 +3468,22 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     className={styles.inputNarrow}
                   />
                 </div>
+                <input
+                  type="text"
+                  placeholder="メモ"
+                  value={actualMemoInputs[t.id] ?? ''}
+                  onChange={(e) =>
+                    setActualMemoInputs((prev) => ({ ...prev, [t.id]: e.target.value }))
+                  }
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      addLog(t.id);
+                    }
+                  }}
+                  className={styles.inputNarrow}
+                  style={{ width: 80 }}
+                />
                 <button onClick={() => addLog(t.id)} className={styles.iconBtn} title="実績を加算">
                   +
                 </button>
