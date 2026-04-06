@@ -24,11 +24,13 @@ export default function TimeBlockPanel({
   userId,
   startHour = 6,
   endHour = 22,
+  onChangeRange,
 }: {
   todos: Todo[];
   userId: string;
   startHour?: number;
   endHour?: number;
+  onChangeRange?: (start: number, end: number) => void;
 }): React.ReactElement {
   const hours: number[] = useMemo(() => {
     return Array.from({ length: endHour - startHour }, (_, i) => i + startHour);
@@ -103,6 +105,29 @@ export default function TimeBlockPanel({
             {blocks.filter((b) => !b.todoId).length}時間
           </div>
         </div>
+        {onChangeRange && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}>
+            <select
+              value={startHour}
+              onChange={(e) => onChangeRange(parseInt(e.target.value, 10), endHour)}
+              style={{ padding: '2px 4px', borderRadius: 4, border: '1px solid var(--card-border)', fontSize: 12 }}
+            >
+              {Array.from({ length: 24 }, (_, i) => (
+                <option key={i} value={i}>{i}:00</option>
+              ))}
+            </select>
+            <span>〜</span>
+            <select
+              value={endHour}
+              onChange={(e) => onChangeRange(startHour, parseInt(e.target.value, 10))}
+              style={{ padding: '2px 4px', borderRadius: 4, border: '1px solid var(--card-border)', fontSize: 12 }}
+            >
+              {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
+                <option key={h} value={h}>{h}:00</option>
+              ))}
+            </select>
+          </div>
+        )}
         {blocks.some((b) => b.todoId) && (
           <button
             type="button"

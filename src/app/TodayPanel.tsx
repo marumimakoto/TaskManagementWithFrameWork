@@ -25,6 +25,7 @@ export default function TodayPanel({
   userId,
   timeblockStart = 6,
   timeblockEnd = 22,
+  onChangeTimeblockRange,
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
@@ -36,6 +37,7 @@ export default function TodayPanel({
   userId?: string;
   timeblockStart?: number;
   timeblockEnd?: number;
+  onChangeTimeblockRange?: (start: number, end: number) => void;
 }): React.ReactElement {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
     try {
@@ -305,9 +307,9 @@ export default function TodayPanel({
                     value={logMinutes[t.id] ?? ''}
                     onChange={(e) => setLogMinutes((prev) => ({ ...prev, [t.id]: e.target.value }))}
                     onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
-                    className={styles.inputNarrow} disabled={t.done}
+                    className={styles.inputNarrow}
                   />
-                  <button type="button" onClick={() => handleAddLog(t.id)} className={styles.iconBtn} disabled={t.done}>実績</button>
+                  <button type="button" onClick={() => handleAddLog(t.id)} className={styles.iconBtn}>実績</button>
                 </div>
               </>
             )}
@@ -353,7 +355,13 @@ export default function TodayPanel({
 
       {/* タイムブロックビュー */}
       {subView === 'timeblock' && userId && (
-        <TimeBlockPanel todos={todos} userId={userId} startHour={timeblockStart} endHour={timeblockEnd} />
+        <TimeBlockPanel
+          todos={todos}
+          userId={userId}
+          startHour={timeblockStart}
+          endHour={timeblockEnd}
+          onChangeRange={onChangeTimeblockRange}
+        />
       )}
 
       {/* タスク選択ビュー */}

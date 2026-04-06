@@ -1278,12 +1278,17 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ updates }),
     });
-    // 作業ログにも記録
+    // 作業ログにも記録（メモがあれば追加）
+    const memo: string = logInput.trim();
+    const logContent: string = memo ? `+${addMin}分 ${memo}` : `+${addMin}分 作業`;
     fetch('/api/todos/' + id + '/logs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `+${addMin}分 作業`, date: dateStr || undefined }),
+      body: JSON.stringify({ content: logContent, date: dateStr || undefined }),
     });
+    if (memo) {
+      setLogInput('');
+    }
     // 今日分の場合、todayMinMapを更新
     if (!dateStr) {
       setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + addMin }));
@@ -3462,10 +3467,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       }
                     }}
                     className={styles.inputNarrow}
-                    disabled={t.done}
                   />
                 </div>
-                <button onClick={() => addLog(t.id)} className={styles.iconBtn} disabled={t.done} title="実績を加算">
+                <button onClick={() => addLog(t.id)} className={styles.iconBtn} title="実績を加算">
                   +
                 </button>
                 <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
@@ -3847,6 +3851,16 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
           userId={user.id}
           timeblockStart={settings.timeblockStart ?? 6}
           timeblockEnd={settings.timeblockEnd ?? 22}
+          onChangeTimeblockRange={(start: number, end: number) => {
+            const updated = { ...settings, timeblockStart: start, timeblockEnd: end };
+            setSettings(updated);
+            try { localStorage.setItem('kiroku:settings:' + user.id, JSON.stringify(updated)); } catch { /* ignore */ }
+            fetch('/api/settings', {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: user.id, settings: updated }),
+            });
+          }}
           onAddLog={(id: string, minutes: number) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {
