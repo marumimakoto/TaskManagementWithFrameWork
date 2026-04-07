@@ -212,13 +212,13 @@ export default function TimeBlockPanel({
         </>)}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: 16 }}>
-        {/* タスクリスト */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
+        {/* 左: タスクリスト */}
         <div>
           <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>
-            タスク（{isMobile ? 'タップで選択' : 'タップ or ドラッグ'}）
+            タスク（タップで選択）
           </h4>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+          <div style={{ display: 'grid', gap: 4 }}>
             {undoneTodos.map((t: Todo) => (
               <div
                 key={t.id}
