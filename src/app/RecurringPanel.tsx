@@ -399,22 +399,21 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
         <div className={styles.archiveList}>
           {items.map((t: RecurringTodo) => (
             <div key={t.id} className={styles.archiveCard}>
-              <div className={styles.archiveCardMain}>
-                <span
-                  className={styles.activityTypeBadge}
-                  style={{ background: '#3b82f6' }}
-                >
-                  有効
+              {/* タイトル行 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className={styles.activityTypeBadge} style={{ background: '#3b82f6', flexShrink: 0 }}>有効</span>
+                <span className={styles.archiveTitle} style={{ flex: 1 }}>{t.title}</span>
+              </div>
+              {/* 設定行 */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent, #2563eb)' }}>
+                  🔁 {recurrenceLabel(t.recurrence)}
                 </span>
-                <span className={styles.archiveTitle}>{t.title}</span>
                 {t.category && (
                   <span style={{ fontSize: 11, padding: '1px 6px', borderRadius: 999, background: '#e0f2fe', color: '#0369a1', fontWeight: 600 }}>
                     {t.category}
                   </span>
                 )}
-                <span style={{ fontSize: '15px', fontWeight: 'bold', color: 'var(--accent, #2563eb)' }}>
-                  🔁 {recurrenceLabel(t.recurrence)}
-                </span>
               </div>
 
               {t.detail && (
