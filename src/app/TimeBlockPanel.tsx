@@ -108,6 +108,8 @@ export default function TimeBlockPanel({
   }, [startHour, endHour]);
 
   const [dragTodoId, setDragTodoId] = useState<string | null>(null);
+  // スマホ用: タップで選択 → スロットタップで割り当て
+  const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
 
   const undoneTodos: Todo[] = useMemo(() => {
     return todos.filter((t) => !t.done);
@@ -213,7 +215,7 @@ export default function TimeBlockPanel({
         {/* 左: 未割り当てタスク */}
         <div>
           <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>
-            タスク（ドラッグして配置）
+            タスク（タップ or ドラッグ）
           </h4>
           <div style={{ display: 'grid', gap: 4 }}>
             {undoneTodos.map((t: Todo) => (
@@ -222,9 +224,11 @@ export default function TimeBlockPanel({
                 draggable
                 onDragStart={() => setDragTodoId(t.id)}
                 onDragEnd={() => setDragTodoId(null)}
+                onClick={() => setSelectedTodoId(selectedTodoId === t.id ? null : t.id)}
                 style={{
                   padding: '6px 10px', borderRadius: 6, cursor: 'grab',
-                  background: 'var(--card-bg)', border: '1px solid var(--card-border)',
+                  background: selectedTodoId === t.id ? '#dbeafe' : 'var(--card-bg)',
+                  border: selectedTodoId === t.id ? '2px solid #3b82f6' : '1px solid var(--card-border)',
                   fontSize: 13,
                 }}
               >
@@ -260,12 +264,22 @@ export default function TimeBlockPanel({
                       setDragTodoId(null);
                     }
                   }}
+                  onClick={() => {
+                    // タップで割り当て（タスクが選択されている場合）
+                    if (selectedTodoId) {
+                      assignTodo(block.hour, selectedTodoId);
+                      setSelectedTodoId(null);
+                    }
+                  }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8,
                     padding: '6px 10px', borderRadius: 6,
-                    background: isCurrentHour ? '#eff6ff' : 'var(--card-bg)',
+                    background: selectedTodoId && !block.todoId
+                      ? '#fef3c7'
+                      : isCurrentHour ? '#eff6ff' : 'var(--card-bg)',
                     border: isCurrentHour ? '2px solid #3b82f6' : '1px solid var(--card-border)',
                     minHeight: 40,
+                    cursor: selectedTodoId ? 'pointer' : 'default',
                   }}
                 >
                   <span style={{ width: 45, fontSize: 13, fontWeight: 600, color: isCurrentHour ? '#3b82f6' : 'var(--muted)', flexShrink: 0 }}>
@@ -290,8 +304,8 @@ export default function TimeBlockPanel({
                       </button>
                     </div>
                   ) : (
-                    <span style={{ flex: 1, fontSize: 12, color: 'var(--input-border)' }}>
-                      {dragTodoId ? 'ここにドロップ' : '—'}
+                    <span style={{ flex: 1, fontSize: 12, color: selectedTodoId ? '#f59e0b' : 'var(--input-border)' }}>
+                      {selectedTodoId ? 'タップで配置' : dragTodoId ? 'ここにドロップ' : '—'}
                     </span>
                   )}
                 </div>
