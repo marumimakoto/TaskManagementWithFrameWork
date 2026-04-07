@@ -3886,16 +3886,21 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             // todayMinMapを更新
             setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
           }}
-          onAddTodo={(title: string, estMin: number) => {
+          categories={todoCategories}
+          onAddTodo={(data: { title: string; detail: string; estMin: number; category: string; recurrence: string; deadline: string }) => {
             const newId: string = uid();
             const now: number = Date.now();
+            const d: number | undefined = data.deadline ? parseDeadline(data.deadline) : undefined;
             const todo: Todo = {
               id: newId,
-              title,
-              estMin,
+              title: data.title,
+              estMin: data.estMin,
               actualMin: 0,
               stuckHours: 0,
-              recurrence: 'carry',
+              recurrence: data.recurrence || 'carry',
+              detail: data.detail || undefined,
+              category: data.category || '',
+              deadline: d,
               started: false,
               done: false,
               sortOrder: todos.length > 0 ? Math.min(...todos.map((t) => t.sortOrder)) - 1 : 0,

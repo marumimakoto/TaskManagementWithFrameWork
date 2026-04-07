@@ -5,6 +5,7 @@ import type { Todo } from './types';
 import { minutesToText, formatDeadline } from './utils';
 import styles from './page.module.css';
 import TimeBlockPanel from './TimeBlockPanel';
+import TaskAddForm from './TaskAddForm';
 
 const TODAY_IDS_KEY: string = 'kiroku:today-ids';
 const TODAY_DATE_KEY: string = 'kiroku:today-date';
@@ -19,6 +20,7 @@ export default function TodayPanel({
   onToggleDone,
   onAddLog,
   onAddTodo,
+  categories = [],
   todayActualMap = {},
   renderExpanded,
   onFieldEdit,
@@ -30,7 +32,8 @@ export default function TodayPanel({
   todos: Todo[];
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
-  onAddTodo?: (title: string, estMin: number) => void;
+  onAddTodo?: (data: { title: string; detail: string; estMin: number; category: string; recurrence: string; deadline: string }) => void;
+  categories?: { id: string; name: string }[];
   todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
   onFieldEdit?: (todoId: string, field: string, value: string) => void;
@@ -69,8 +72,6 @@ export default function TodayPanel({
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
   const [subView, setSubView] = useState<'tasks' | 'timeblock'>('tasks');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [newTitle, setNewTitle] = useState<string>('');
-  const [newEstMin, setNewEstMin] = useState<string>('30');
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -428,68 +429,27 @@ export default function TodayPanel({
       </>}
 
       {/* タスク新規作成モーダル */}
-      {showAddModal && onAddTodo && (
+      {showAddModal && onAddTodo && userId && (
         <div
-          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: 16 }}
           onClick={() => setShowAddModal(false)}
         >
           <div
-            style={{ background: 'var(--card-bg)', borderRadius: 12, padding: 20, width: '90%', maxWidth: 400 }}
+            style={{ background: 'var(--card-bg)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 440, margin: 'auto' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12 }}>タスクを新規作成</h3>
-            <div style={{ display: 'grid', gap: 10 }}>
-              <input
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="タスク名"
-                className={styles.input}
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && newTitle.trim()) {
-                    onAddTodo(newTitle.trim(), parseInt(newEstMin, 10) || 30);
-                    setNewTitle('');
-                    setNewEstMin('30');
-                    setShowAddModal(false);
-                  }
-                }}
-              />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <label style={{ fontSize: 13, color: 'var(--muted)' }}>予定時間</label>
-                <input
-                  type="number"
-                  min="1"
-                  value={newEstMin}
-                  onChange={(e) => setNewEstMin(e.target.value)}
-                  className={styles.inputNarrow}
-                  style={{ width: 60 }}
-                />
-                <span style={{ fontSize: 13, color: 'var(--muted)' }}>分</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  className={styles.iconBtn}
-                  onClick={() => setShowAddModal(false)}
-                >
-                  キャンセル
-                </button>
-                <button
-                  type="button"
-                  className={styles.primaryBtn}
-                  disabled={!newTitle.trim()}
-                  onClick={() => {
-                    onAddTodo(newTitle.trim(), parseInt(newEstMin, 10) || 30);
-                    setNewTitle('');
-                    setNewEstMin('30');
-                    setShowAddModal(false);
-                  }}
-                >
-                  追加
-                </button>
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>タスクを新規作成</h3>
+              <button type="button" onClick={() => setShowAddModal(false)} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--muted)' }}>×</button>
             </div>
+            <TaskAddForm
+              categories={categories}
+              userId={userId}
+              onAdd={(data) => {
+                onAddTodo(data);
+                setShowAddModal(false);
+              }}
+            />
           </div>
         </div>
       )}
