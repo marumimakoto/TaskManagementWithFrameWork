@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Todo } from './types';
 import { minutesToText } from './utils';
+import { useIsMobile } from './useIsMobile';
 import styles from './page.module.css';
 
 /** タイムブロックの1スロット */
@@ -107,8 +108,8 @@ export default function TimeBlockPanel({
     });
   }, [startHour, endHour]);
 
+  const isMobile: boolean = useIsMobile();
   const [dragTodoId, setDragTodoId] = useState<string | null>(null);
-  // スマホ用: タップで選択 → スロットタップで割り当て
   const [selectedTodoId, setSelectedTodoId] = useState<string | null>(null);
 
   const undoneTodos: Todo[] = useMemo(() => {
@@ -211,19 +212,19 @@ export default function TimeBlockPanel({
         </>)}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 16 }}>
-        {/* 左: 未割り当てタスク */}
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 2fr', gap: 16 }}>
+        {/* タスクリスト */}
         <div>
           <h4 style={{ fontSize: 14, fontWeight: 600, color: 'var(--muted)', marginBottom: 8 }}>
-            タスク（タップ or ドラッグ）
+            タスク（{isMobile ? 'タップで選択' : 'タップ or ドラッグ'}）
           </h4>
-          <div style={{ display: 'grid', gap: 4 }}>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {undoneTodos.map((t: Todo) => (
               <div
                 key={t.id}
-                draggable
-                onDragStart={() => setDragTodoId(t.id)}
-                onDragEnd={() => setDragTodoId(null)}
+                draggable={!isMobile}
+                onDragStart={() => { if (!isMobile) { setDragTodoId(t.id); } }}
+                onDragEnd={() => { if (!isMobile) { setDragTodoId(null); } }}
                 onClick={() => setSelectedTodoId(selectedTodoId === t.id ? null : t.id)}
                 style={{
                   padding: '6px 10px', borderRadius: 6, cursor: 'grab',
