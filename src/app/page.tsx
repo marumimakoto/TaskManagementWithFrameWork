@@ -3862,7 +3862,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               body: JSON.stringify({ userId: user.id, settings: updated }),
             });
           }}
-          onAddLog={(id: string, minutes: number) => {
+          onAddLog={(id: string, minutes: number, memo?: string) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {
               return;
@@ -3877,11 +3877,12 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: now, started: 1 } }),
             });
-            // 作業ログにも記録
+            // 作業ログにも記録（メモがあれば含める）
+            const logContent: string = memo ? `+${minutes}分 ${memo}` : `+${minutes}分 作業`;
             fetch('/api/todos/' + id + '/logs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: `+${minutes}分 作業` }),
+              body: JSON.stringify({ content: logContent }),
             });
             // todayMinMapを更新
             setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
