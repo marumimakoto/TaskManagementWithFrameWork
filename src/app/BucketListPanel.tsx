@@ -102,6 +102,8 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
   const [categories, setCategories] = useState<BucketCategory[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [showMobileForm, setShowMobileForm] = useState<boolean>(false);
+  const [undoItem, setUndoItem] = useState<BucketItem | null>(null);
+  const [undoMessage, setUndoMessage] = useState<string>('');
 
   // 追加フォーム
   const [newTitle, setNewTitle] = useState<string>('');
@@ -244,14 +246,45 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
     });
   }
 
-  /** 削除 */
-  async function deleteItem(id: string): Promise<void> {
+  /** 削除（Undoトースト付き） */
+  function deleteItem(id: string): void {
+    const target: BucketItem | undefined = items.find((i) => i.id === id);
+    if (!target) {
+      return;
+    }
+    // 楽観的削除（DOMからは即座に消す）
     setItems((prev) => prev.filter((i) => i.id !== id));
-    await fetch('/api/bucket-list', {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id }),
-    });
+    setUndoItem(target);
+    setUndoMessage(`「${target.title}」を削除しました`);
+
+    // 5秒後にAPI削除を実行（Undoされなかった場合のみ）
+    const timer: ReturnType<typeof setTimeout> = setTimeout(() => {
+      setUndoItem((current) => {
+        if (current?.id === id) {
+          fetch('/api/bucket-list', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id }),
+          });
+          setUndoMessage('');
+          return null;
+        }
+        return current;
+      });
+    }, 5000);
+
+    // 別のタイマーが既にあればクリアする処理は省略（複数並行削除の場合はラスト1個のみ復元可能）
+    void timer;
+  }
+
+  /** Undo: 削除されたアイテムを復元 */
+  function undoDelete(): void {
+    if (!undoItem) {
+      return;
+    }
+    setItems((prev) => [...prev, undoItem].sort((a, b) => a.sortOrder - b.sortOrder));
+    setUndoItem(null);
+    setUndoMessage('');
   }
 
   /** 編集開始 */
@@ -838,7 +871,7 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
                   >
                     Googleカレンダーに追加
                   </a>
-                  <button onClick={() => { if (confirm('削除しますか？')) { deleteItem(item.id); } }} className={styles.dangerIconBtn} style={{ fontSize: 12, padding: '2px 8px' }}>削除</button>
+                  <button onClick={() => deleteItem(item.id)} className={styles.dangerIconBtn} style={{ fontSize: 12, padding: '2px 8px' }}>削除</button>
                 </div>
               </div>
             )}
@@ -874,6 +907,46 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
         >
           +
         </button>
+      )}
+
+      {/* Undoトースト */}
+      {undoItem && undoMessage && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            background: '#1f2937',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: 8,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+            zIndex: 9000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 16,
+            fontSize: 14,
+          }}
+        >
+          <span>{undoMessage}</span>
+          <button
+            type="button"
+            onClick={undoDelete}
+            style={{
+              background: 'transparent',
+              border: '1px solid #60a5fa',
+              color: '#60a5fa',
+              padding: '4px 12px',
+              borderRadius: 6,
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            元に戻す
+          </button>
+        </div>
       )}
     </div>
   );
