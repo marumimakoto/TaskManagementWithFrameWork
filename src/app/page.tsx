@@ -3151,9 +3151,44 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     mouseDragStartY.current = e.clientY;
                     setMouseDragY(0);
 
+                    // 階層化された子孫タスクのゴーストレイヤーを作成
+                    const descendantIdsForGhost: string[] = getDescendantIds(t.id, todos);
+                    const ghostLayer: HTMLDivElement = document.createElement('div');
+                    ghostLayer.style.position = 'fixed';
+                    ghostLayer.style.left = '0';
+                    ghostLayer.style.top = '0';
+                    ghostLayer.style.pointerEvents = 'none';
+                    ghostLayer.style.zIndex = '9999';
+                    ghostLayer.style.opacity = '0.6';
+                    ghostLayer.style.transition = 'none';
+
+                    // 子孫カードの位置とクローンを記録
+                    for (const descId of descendantIdsForGhost) {
+                      const descEl: HTMLElement | null = cardRefsMap.current[descId] ?? null;
+                      if (!descEl) {
+                        continue;
+                      }
+                      const rect: DOMRect = descEl.getBoundingClientRect();
+                      const clone: HTMLElement = descEl.cloneNode(true) as HTMLElement;
+                      clone.style.position = 'absolute';
+                      clone.style.left = `${rect.left}px`;
+                      clone.style.top = `${rect.top}px`;
+                      clone.style.width = `${rect.width}px`;
+                      clone.style.height = `${rect.height}px`;
+                      clone.style.margin = '0';
+                      clone.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                      ghostLayer.appendChild(clone);
+                    }
+
+                    if (descendantIdsForGhost.length > 0) {
+                      document.body.appendChild(ghostLayer);
+                    }
+
                     const handleMouseMove = (ev: MouseEvent): void => {
                       const dy: number = ev.clientY - mouseDragStartY.current;
                       setMouseDragY(dy);
+                      // ゴーストレイヤーをドラッグ量だけ移動
+                      ghostLayer.style.transform = `translateY(${dy}px)`;
                       // ドロップ先のインデックスを計算
                       const cards: HTMLElement[] = Array.from(document.querySelectorAll('[data-todo-id]') as NodeListOf<HTMLElement>);
                       let insertBeforeIdx: number = cards.length;
@@ -3179,6 +3214,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     const handleMouseUp = (): void => {
                       document.removeEventListener('mousemove', handleMouseMove);
                       document.removeEventListener('mouseup', handleMouseUp);
+
+                      // ゴーストレイヤーを削除
+                      if (ghostLayer.parentNode) {
+                        ghostLayer.parentNode.removeChild(ghostLayer);
+                      }
 
                       // ドロップ処理
                       if (dropBetweenIndexRef.current !== null) {
