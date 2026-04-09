@@ -3599,6 +3599,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       {formatDateShort(t.createdAt)}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12, padding: '2px 6px' }}
+                    onClick={(e) => { e.stopPropagation(); moveUp(t.id); }}
+                    title="上に移動"
+                  >▲</button>
+                  <button
+                    type="button"
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12, padding: '2px 6px' }}
+                    onClick={(e) => { e.stopPropagation(); moveDown(t.id); }}
+                    title="下に移動"
+                  >▼</button>
                   <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
                 </div>
                 {isExpanded && renderExpandedContent(t)}
@@ -3681,6 +3695,20 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                       {formatDateShort(t.createdAt)}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12, padding: '2px 6px' }}
+                    onClick={(e) => { e.stopPropagation(); moveUp(t.id); }}
+                    title="上に移動"
+                  >▲</button>
+                  <button
+                    type="button"
+                    className={styles.iconBtn}
+                    style={{ fontSize: 12, padding: '2px 6px' }}
+                    onClick={(e) => { e.stopPropagation(); moveDown(t.id); }}
+                    title="下に移動"
+                  >▼</button>
                   <button
                     onClick={(e) => { e.stopPropagation(); removeTodoWithUndo(t.id); }}
                     className={styles.dangerIconBtn}
