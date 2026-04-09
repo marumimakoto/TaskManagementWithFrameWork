@@ -20,6 +20,7 @@ export default function TodayPanel({
   onToggleDone,
   onAddLog,
   onAddTodo,
+  onDeleteTodo,
   categories = [],
   todayActualMap = {},
   renderExpanded,
@@ -33,6 +34,7 @@ export default function TodayPanel({
   onToggleDone: (id: string) => void;
   onAddLog: (id: string, minutes: number) => void;
   onAddTodo?: (data: { title: string; detail: string; estMin: number; category: string; recurrence: string; deadline: string }) => void;
+  onDeleteTodo?: (id: string) => void;
   categories?: { id: string; name: string }[];
   todayActualMap?: Record<string, number>;
   renderExpanded?: (t: Todo) => React.ReactNode;
@@ -262,6 +264,22 @@ export default function TodayPanel({
               </span>
             ) : null}
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>{isExpanded ? '▾' : '▸'}</span>
+            {onDeleteTodo && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (confirm(`「${t.title}」を削除しますか？`)) {
+                    onDeleteTodo(t.id);
+                  }
+                }}
+                className={styles.dangerIconBtn}
+                style={{ fontSize: 11, padding: '2px 6px' }}
+                title="削除"
+              >
+                🗑
+              </button>
+            )}
           </div>
         </div>
 

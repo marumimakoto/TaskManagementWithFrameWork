@@ -3887,6 +3887,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
           }}
           categories={todoCategories}
+          onDeleteTodo={(id: string) => removeTodoWithUndo(id)}
           onAddTodo={(data: { title: string; detail: string; estMin: number; category: string; recurrence: string; deadline: string }) => {
             const newId: string = uid();
             const now: number = Date.now();
