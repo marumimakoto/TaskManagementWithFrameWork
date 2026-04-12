@@ -32,7 +32,7 @@ export default function TodayPanel({
 }: {
   todos: Todo[];
   onToggleDone: (id: string) => void;
-  onAddLog: (id: string, minutes: number, memo?: string) => void;
+  onAddLog: (id: string, minutes: number) => void;
   onAddTodo?: (data: { title: string; detail: string; estMin: number; category: string; recurrence: string; deadline: string }) => void;
   onDeleteTodo?: (id: string) => void;
   categories?: { id: string; name: string }[];
@@ -72,7 +72,6 @@ export default function TodayPanel({
   }, [selectedIds]);
 
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
-  const [logMemos, setLogMemos] = useState<Record<string, string>>({});
   const [subView, setSubView] = useState<'tasks' | 'timeblock'>('tasks');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
@@ -139,10 +138,8 @@ export default function TodayPanel({
     if (min <= 0) {
       return;
     }
-    const memo: string = (logMemos[id] ?? '').trim();
-    onAddLog(id, min, memo || undefined);
+    onAddLog(id, min);
     setLogMinutes((prev) => ({ ...prev, [id]: '' }));
-    setLogMemos((prev) => ({ ...prev, [id]: '' }));
   }
 
   function renderTaskCard(t: Todo, isSelected: boolean): React.ReactElement {
@@ -289,7 +286,7 @@ export default function TodayPanel({
         {/* 実績入力（選択中のカードに常時表示） */}
         {isSelected && (
           <div
-            style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, paddingLeft: 30, flexWrap: 'wrap' }}
+            style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 8, paddingLeft: 30 }}
             onClick={(e) => e.stopPropagation()}
           >
             <input
@@ -301,15 +298,6 @@ export default function TodayPanel({
               onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
               className={styles.inputNarrow}
               style={{ width: 60 }}
-            />
-            <input
-              type="text"
-              placeholder="メモ（任意）"
-              value={logMemos[t.id] ?? ''}
-              onChange={(e) => setLogMemos((prev) => ({ ...prev, [t.id]: e.target.value }))}
-              onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
-              className={styles.inputNarrow}
-              style={{ flex: 1, minWidth: 100 }}
             />
             <button
               type="button"

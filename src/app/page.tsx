@@ -1232,11 +1232,21 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
    * 日付が指定されていればその日の23:59:59を、未指定なら現在時刻を使う
    * @param id - 対象タスクのID
    */
-  async function addLog(id: string): Promise<void> {
-    const text: string = actualInputs[id] ?? '0';
-    const addMin: number = Math.max(0, parseInt(text || '0', 10));
-    if (addMin <= 0) {
-      log('addLog:blocked', { id });
+  /**
+   * 実績時間と作業ログを一括登録する
+   * どちらのボタンから呼ばれても、両方の入力欄を確認して空でなければ登録する
+   * - +分に値あり → 実績加算
+   * - テキストに値あり → 作業ログ記録
+   * - 両方あり → 「+N分 メモ」として実績加算＋作業ログを1回で記録
+   */
+  async function recordWork(id: string): Promise<void> {
+    const minText: string = actualInputs[id] ?? '0';
+    const addMin: number = Math.max(0, parseInt(minText || '0', 10));
+    const memo: string = (expandedId === id) ? logInput.trim() : '';
+    const dateStr: string = actualDateInputs[id] ?? '';
+
+    // 両方空なら何もしない
+    if (addMin <= 0 && !memo) {
       return;
     }
 
@@ -1245,8 +1255,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       return;
     }
 
-    // 日付入力があればその日の23:59:59、なければ現在時刻
-    const dateStr: string = actualDateInputs[id] ?? '';
+    // 日付
     let workedAt: number;
     if (dateStr) {
       const parts: string[] = dateStr.split('-');
@@ -1256,44 +1265,56 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       workedAt = Date.now();
     }
 
-    const newActual: number = target.actualMin + addMin;
+    // 実績加算（+分に値がある場合）
+    if (addMin > 0) {
+      const newActual: number = target.actualMin + addMin;
+      const shouldStart: boolean = !target.started;
+      setTodos((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? { ...t, actualMin: newActual, lastWorkedAt: workedAt, started: true }
+            : t,
+        ),
+      );
+      const updates: Record<string, unknown> = { actualMin: newActual, lastWorkedAt: workedAt };
+      if (shouldStart) {
+        updates.started = 1;
+      }
+      await fetch('/api/todos/' + id, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates }),
+      });
+      // 今日分の場合、todayMinMapを更新
+      if (!dateStr) {
+        setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + addMin }));
+      }
+    }
 
-    const shouldStart: boolean = !target.started;
-    setTodos((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? { ...t, actualMin: newActual, lastWorkedAt: workedAt, started: true }
-          : t,
-      ),
-    );
+    // 作業ログ記録
+    const logContent: string = addMin > 0
+      ? (memo ? `+${addMin}分 ${memo}` : `+${addMin}分 作業`)
+      : memo;
+    if (logContent) {
+      const res: Response = await fetch('/api/todos/' + id + '/logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: logContent, date: dateStr || undefined }),
+      });
+      const newLog: WorkLog = await res.json();
+      setWorkLogs((prev) => ({
+        ...prev,
+        [id]: [newLog, ...(prev[id] ?? [])],
+      }));
+    }
+
+    // 入力欄をクリア
     setActualInputs((prev) => ({ ...prev, [id]: '' }));
     setActualDateInputs((prev) => ({ ...prev, [id]: '' }));
-    log('addLog:ok', { id, addMin, dateStr, autoStarted: shouldStart });
-
-    const updates: Record<string, unknown> = { actualMin: newActual, lastWorkedAt: workedAt };
-    if (shouldStart) {
-      updates.started = 1;
-    }
-    await fetch('/api/todos/' + id, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ updates }),
-    });
-    // 作業ログにも記録（展開中にメモ入力があれば同時記録）
-    const memo: string = (expandedId === id) ? logInput.trim() : '';
-    const logContent: string = memo ? `+${addMin}分 ${memo}` : `+${addMin}分 作業`;
-    fetch('/api/todos/' + id + '/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: logContent, date: dateStr || undefined }),
-    });
     if (memo) {
       setLogInput('');
     }
-    // 今日分の場合、todayMinMapを更新
-    if (!dateStr) {
-      setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + addMin }));
-    }
+    log('recordWork', { id, addMin, memo, dateStr });
   }
 
   /**
@@ -2002,7 +2023,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             />
             <button
               type="button"
-              onClick={() => addWorkLog(t.id)}
+              onClick={() => recordWork(t.id)}
               className={styles.iconBtn}
             >
               記録
@@ -2015,7 +2036,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
             onKeyDown={(e) => {
               if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
-                addWorkLog(t.id);
+                recordWork(t.id);
               }
             }}
             className={styles.input}
@@ -2200,26 +2221,6 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
    * 展開中のタスクに作業ログを追加する
    * @param todoId - 対象タスクのID
    */
-  async function addWorkLog(todoId: string): Promise<void> {
-    const content: string = logInput.trim();
-    if (!content) {
-      return;
-    }
-    const dateOverride: string = actualDateInputs[todoId] ?? '';
-    const res: Response = await fetch('/api/todos/' + todoId + '/logs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content, date: dateOverride || undefined }),
-    });
-    const newLog: WorkLog = await res.json();
-    setWorkLogs((prev) => ({
-      ...prev,
-      [todoId]: [newLog, ...(prev[todoId] ?? [])],
-    }));
-    setLogInput('');
-    setActualDateInputs((prev) => ({ ...prev, [todoId]: '' }));
-    log('workLog:add', { todoId, content });
-  }
 
   // --- Render ---
 
@@ -3504,13 +3505,13 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
-                        addLog(t.id);
+                        recordWork(t.id);
                       }
                     }}
                     className={styles.inputNarrow}
                   />
                 </div>
-                <button onClick={() => addLog(t.id)} className={styles.iconBtn} title="実績を加算">
+                <button onClick={() => recordWork(t.id)} className={styles.iconBtn} title="実績を加算">
                   +
                 </button>
                 <DeleteButton onClick={() => removeTodoWithUndo(t.id)} />
@@ -3930,7 +3931,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               body: JSON.stringify({ userId: user.id, settings: updated }),
             });
           }}
-          onAddLog={(id: string, minutes: number, memo?: string) => {
+          onAddLog={(id: string, minutes: number) => {
             const target: Todo | undefined = todos.find((t) => t.id === id);
             if (!target) {
               return;
@@ -3945,12 +3946,11 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ updates: { actualMin: newActual, lastWorkedAt: now, started: 1 } }),
             });
-            // 作業ログにも記録（メモがあれば含める）
-            const logContent: string = memo ? `+${minutes}分 ${memo}` : `+${minutes}分 作業`;
+            // 作業ログにも記録
             fetch('/api/todos/' + id + '/logs', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ content: logContent }),
+              body: JSON.stringify({ content: `+${minutes}分 作業` }),
             });
             // todayMinMapを更新
             setTodayMinMap((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + minutes }));
