@@ -665,7 +665,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     });
     window.setTimeout(() => {
       setUndoToasts((prev) => prev.filter((t) => t.toastId !== toast.toastId));
-    }, 3000);
+    }, 5000);
   }
 
   const [actualInputs, setActualInputs] = useState<Record<string, string>>({});
@@ -1296,6 +1296,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
     const logContent: string = addMin > 0
       ? (memo ? `+${addMin}分 ${memo}` : `+${addMin}分 作業`)
       : memo;
+    let newLogId: string | null = null;
     if (logContent) {
       const res: Response = await fetch('/api/todos/' + id + '/logs', {
         method: 'POST',
@@ -1303,6 +1304,7 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
         body: JSON.stringify({ content: logContent, date: dateStr || undefined }),
       });
       const newLog: WorkLog = await res.json();
+      newLogId = newLog.id;
       setWorkLogs((prev) => ({
         ...prev,
         [id]: [newLog, ...(prev[id] ?? [])],
@@ -1316,6 +1318,60 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
       setLogInput('');
     }
     log('recordWork', { id, addMin, memo, dateStr });
+
+    // Undoトースト表示
+    let toastMessage: string = '';
+    if (addMin > 0 && memo) {
+      toastMessage = `✅ +${addMin}分 「${memo}」を記録`;
+    } else if (addMin > 0) {
+      toastMessage = `✅ +${addMin}分 を記録`;
+    } else if (memo) {
+      toastMessage = `✅ 作業ログを記録`;
+    }
+    if (toastMessage) {
+      const toastId: string = uid();
+      const originalActual: number = target.actualMin;
+      const originalLastWorked: number | undefined = target.lastWorkedAt;
+      const originalStarted: boolean = target.started;
+      showUndoToast({
+        toastId,
+        todoId: id,
+        message: toastMessage,
+        undoLabel: '取り消す',
+        undo: () => {
+          // 実績を巻き戻し
+          if (addMin > 0) {
+            setTodos((prev) =>
+              prev.map((t) =>
+                t.id === id
+                  ? { ...t, actualMin: originalActual, lastWorkedAt: originalLastWorked, started: originalStarted }
+                  : t,
+              ),
+            );
+            fetch('/api/todos/' + id, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ updates: { actualMin: originalActual, lastWorkedAt: originalLastWorked ?? null, started: originalStarted ? 1 : 0 } }),
+            });
+            if (!dateStr) {
+              setTodayMinMap((prev) => ({ ...prev, [id]: Math.max(0, (prev[id] ?? 0) - addMin) }));
+            }
+          }
+          // 作業ログ削除
+          if (newLogId) {
+            setWorkLogs((prev) => ({
+              ...prev,
+              [id]: (prev[id] ?? []).filter((l: WorkLog) => l.id !== newLogId),
+            }));
+            fetch('/api/todos/' + id + '/logs', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ logId: newLogId }),
+            });
+          }
+        },
+      });
+    }
   }
 
   /**
