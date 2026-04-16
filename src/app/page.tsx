@@ -1242,8 +1242,9 @@ function TodoApp({ user, onLogout, onUserUpdate }: { user: AppUser; onLogout: ()
   async function recordWork(id: string): Promise<void> {
     const minText: string = actualInputs[id] ?? '0';
     const addMin: number = Math.max(0, parseInt(minText || '0', 10));
-    const memo: string = (expandedId === id) ? logInput.trim() : '';
+    const memo: string = logInput.trim();
     const dateStr: string = actualDateInputs[id] ?? '';
+    console.log('[recordWork]', { id, addMin, memo, dateStr });
 
     // 両方空なら何もしない
     if (addMin <= 0 && !memo) {
