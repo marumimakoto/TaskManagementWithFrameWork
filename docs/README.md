@@ -9,6 +9,7 @@
 | [architecture.md](./architecture.md) | 全体アーキテクチャ、レイヤー構成、ディレクトリ構成 |
 | [class-diagram.md](./class-diagram.md) | データモデル、コンポーネント依存、API/ライブラリ関係 |
 | [sequence-diagrams.md](./sequence-diagrams.md) | 主要ユースケースのシーケンス図（10シナリオ） |
+| [screen-flow.md](./screen-flow.md) | 画面遷移図、タブ構成、モーダル一覧、権限制御 |
 | [er-diagram.md](./er-diagram.md) | DBテーブル構造、インデックス、保持ポリシー |
 | [operations.md](./operations.md) | デプロイ手順、環境変数、モニタリング、トラブルシューティング |
 
