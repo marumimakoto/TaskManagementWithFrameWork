@@ -5,6 +5,7 @@ import type { AppUser } from './types';
 import { minutesToText } from './utils';
 import { useIsMobile } from './useIsMobile';
 import { Pagination } from './SharedComponents';
+import { config } from '@/lib/config';
 import styles from './page.module.css';
 
 /** 統一アクティビティエントリ */
@@ -62,7 +63,7 @@ export default function ActivityPanel({ user, isPro, onShowProModal }: { user: A
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set(['work_log', 'completed']));
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
-  const PAGE_SIZE: number = 20;
+  const PAGE_SIZE: number = config.pagination.pageSize;
 
   /** アクティビティを取得する */
   const fetchEntries = useCallback(async (from?: string, to?: string): Promise<void> => {

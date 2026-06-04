@@ -204,6 +204,16 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
     showMsg('繰り返しを復元しました');
   }
 
+  /** 繰り返しルールのカテゴリを変更する（API更新 + state反映） */
+  async function setRuleCategory(id: string, category: string): Promise<void> {
+    await fetch('/api/todos/recurring', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, updates: { category } }),
+    });
+    setItems((prev) => prev.map((r) => (r.id === id ? { ...r, category } : r)));
+  }
+
   if (loading) {
     return <p className={styles.diaryEmpty}>読み込み中...</p>;
   }
@@ -212,6 +222,10 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
   const totalGenerated: number = items.reduce((sum, t) => sum + t.generatedCount, 0);
   const totalCompleted: number = items.reduce((sum, t) => sum + t.completedCount, 0);
   const overallRate: number = totalGenerated > 0 ? Math.round((totalCompleted / totalGenerated) * 100) : 0;
+  /** 全ルール累計時間（達成率タブと累計時間タブで共用） */
+  const totalAllMin: number = Object.values(totalActualByTitle).reduce((s, v) => s + v, 0);
+  /** 累計時間タブのバー比率計算用、最低1で除算ゼロ回避 */
+  const maxRuleMin: number = Math.max(...items.map((i) => totalActualByTitle[i.title] ?? 0), 1);
 
   return (
     <div className={styles.diaryPanel}>
@@ -297,7 +311,7 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
               <div style={{ textAlign: 'center' }}>
                 <div style={{ color: 'var(--muted)', fontSize: 12 }}>累計実績</div>
                 <div style={{ fontWeight: 700, fontSize: 20, color: '#3b82f6' }}>
-                  {minutesToText(Object.values(totalActualByTitle).reduce((s, v) => s + v, 0))}
+                  {minutesToText(totalAllMin)}
                 </div>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -354,7 +368,7 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontWeight: 600 }}>累計作業時間</span>
               <span style={{ fontSize: 24, fontWeight: 700, color: '#3b82f6' }}>
-                {minutesToText(Object.values(totalActualByTitle).reduce((s, v) => s + v, 0))}
+                {minutesToText(totalAllMin)}
               </span>
             </div>
           </div>
@@ -368,8 +382,7 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
                 .map((t) => ({ ...t, totalMin: totalActualByTitle[t.title] ?? 0 }))
                 .sort((a, b) => b.totalMin - a.totalMin)
                 .map((t) => {
-                  const maxMin: number = Math.max(...items.map((i) => totalActualByTitle[i.title] ?? 0), 1);
-                  const barWidth: number = maxMin > 0 ? (t.totalMin / maxMin) * 100 : 0;
+                  const barWidth: number = (t.totalMin / maxRuleMin) * 100;
                   return (
                     <div key={t.id} style={{ padding: '10px 14px', background: 'var(--card-bg)', border: '1px solid var(--card-border)', borderRadius: 10 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -425,40 +438,14 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
               {/* カテゴリ選択（常時表示） */}
               {categories.length > 0 && (
                 <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      await fetch('/api/todos/recurring', {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ id: t.id, updates: { category: '' } }),
-                      });
-                      setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: '' } : r));
-                    }}
-                    style={{
-                      padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
-                      border: !t.category ? '2px solid #3b82f6' : '1px solid var(--card-border)',
-                      background: !t.category ? '#dbeafe' : 'var(--card-bg)',
-                      color: !t.category ? '#1d4ed8' : 'var(--foreground)',
-                      fontWeight: !t.category ? 600 : 400,
-                    }}
-                  >
-                    なし
-                  </button>
-                  {categories.map((cat: string) => {
-                    const isActive: boolean = t.category === cat;
+                  {['', ...categories].map((cat: string) => {
+                    const isActive: boolean = t.category === cat || (!t.category && cat === '');
+                    const label: string = cat === '' ? 'なし' : cat;
                     return (
                       <button
-                        key={cat}
+                        key={cat || '__none__'}
                         type="button"
-                        onClick={async () => {
-                          await fetch('/api/todos/recurring', {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ id: t.id, updates: { category: cat } }),
-                          });
-                          setItems((prev) => prev.map((r) => r.id === t.id ? { ...r, category: cat } : r));
-                        }}
+                        onClick={() => setRuleCategory(t.id, cat)}
                         style={{
                           padding: '3px 10px', borderRadius: 999, fontSize: 12, cursor: 'pointer',
                           border: isActive ? '2px solid #3b82f6' : '1px solid var(--card-border)',
@@ -467,7 +454,7 @@ export default function RecurringPanel({ user, onRefresh, categories = [] }: { u
                           fontWeight: isActive ? 600 : 400,
                         }}
                       >
-                        {cat}
+                        {label}
                       </button>
                     );
                   })}

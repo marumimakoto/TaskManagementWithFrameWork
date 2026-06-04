@@ -231,3 +231,19 @@ export function todayString(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+/**
+ * 作業ログのcontentから加算分数を抽出する
+ * recordWorkとPomodoroTimerは「+N分 ...」形式で先頭に記録するため、
+ * その部分をパースして数値を返す。形式に合致しない場合は0
+ * @param content - 作業ログのテキスト
+ * @returns 抽出された分数（0以上）
+ */
+export function extractMinutesFromLog(content: string): number {
+  const match: RegExpMatchArray | null = content.match(/^\+(\d+)分/);
+  if (!match) {
+    return 0;
+  }
+  const minutes: number = parseInt(match[1], 10);
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+}
+

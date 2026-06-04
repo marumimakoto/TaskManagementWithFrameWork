@@ -6,6 +6,7 @@ import { log } from './utils';
 import styles from './page.module.css';
 import RichEditor from './RichEditor';
 import { Pagination } from './SharedComponents';
+import { config } from '@/lib/config';
 
 /**
  * 日記を見直すページ
@@ -27,7 +28,7 @@ export default function DiaryViewPanel({ user }: { user: AppUser }): React.React
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const PAGE_SIZE: number = 20;
+  const PAGE_SIZE: number = config.pagination.pageSize;
 
   /** APIから日記一覧を取得する */
   const fetchEntries = useCallback(async (): Promise<void> => {

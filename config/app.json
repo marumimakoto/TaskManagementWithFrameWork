@@ -1,0 +1,36 @@
+{
+  "toast": {
+    "undoDurationMs": 5000,
+    "bucketListUndoDurationMs": 5000
+  },
+  "pomodoro": {
+    "defaultWorkMin": 25,
+    "defaultBreakMin": 5,
+    "alarmIntervalMs": 2000
+  },
+  "drag": {
+    "longPressMs": 500,
+    "moveThresholdPx": 10,
+    "swipeThresholdPx": 15,
+    "swipeNestThresholdPx": 60
+  },
+  "archive": {
+    "maxItems": 100
+  },
+  "pagination": {
+    "pageSize": 20
+  },
+  "timeblock": {
+    "defaultStartHour": 6,
+    "defaultEndHour": 22
+  },
+  "analytics": {
+    "weeklyReviewWeeks": 8,
+    "burndownDays": 30,
+    "lineChartMaxPoints": 30
+  },
+  "butler": {
+    "defaultMaxChars": 80,
+    "defaultPrompt": "ユーザーを励ませ"
+  }
+}

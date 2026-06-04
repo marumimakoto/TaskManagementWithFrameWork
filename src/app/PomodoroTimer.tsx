@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Todo } from './types';
 import { minutesToText } from './utils';
+import { config } from '@/lib/config';
 import styles from './page.module.css';
 
 type Phase = 'work' | 'break';
@@ -67,8 +68,8 @@ export default function PomodoroTimer({
   todo,
   onClose,
   onAddMinutes,
-  workMinutes = 25,
-  breakMinutes = 5,
+  workMinutes = config.pomodoro.defaultWorkMin,
+  breakMinutes = config.pomodoro.defaultBreakMin,
 }: {
   todo: Todo;
   onClose: () => void;
@@ -161,7 +162,7 @@ export default function PomodoroTimer({
     playAlarmOnce();
     alarmIntervalRef.current = window.setInterval(() => {
       playAlarmOnce();
-    }, 2000);
+    }, config.pomodoro.alarmIntervalMs);
   }
 
   /** アラームを停止する */
@@ -421,6 +422,15 @@ export default function PomodoroTimer({
       const now: number = Date.now();
       const elapsed: number = Math.floor((now - phaseStartedAtRef.current) / 1000);
       finalWorkElapsed = pausedConsumedRef.current + elapsed;
+    }
+
+    // 24時間を超えるタイマーは切り忘れと判定して無効化（実績に記録しない）
+    const MAX_VALID_SECONDS: number = 24 * 60 * 60;
+    if (finalWorkElapsed > MAX_VALID_SECONDS) {
+      alert('タイマーが24時間を超えたため無効として処理しました。\n実績には記録されません（停止し忘れの可能性があります）。');
+      clearState();
+      onClose();
+      return;
     }
 
     const minutes: number = Math.round(finalWorkElapsed / 60);

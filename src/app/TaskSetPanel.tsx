@@ -116,22 +116,16 @@ export default function TaskSetPanel({
   /** セットを作成し、自動で編集モードに入る */
   async function createSet(): Promise<void> {
     const name: string = newSetName.trim();
-    if (!name) {
-      console.warn('[TaskSet] createSet: name is empty');
-      return;
-    }
-    console.debug('[TaskSet] createSet: sending', { userId: user.id, name });
+    if (!name) { return; }
     try {
       const res: Response = await fetch('/api/task-sets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, name, items: [] }),
       });
-      console.debug('[TaskSet] createSet: status', res.status);
       const data: { ok: boolean; id?: string; error?: string } = await res.json();
-      console.debug('[TaskSet] createSet: response', data);
       if (!data.ok) {
-        console.error('[TaskSet] createSet: failed', data.error);
+        console.error('[TaskSet] createSet failed', data.error);
         return;
       }
       setNewSetName('');
@@ -140,7 +134,7 @@ export default function TaskSetPanel({
         setEditingSetId(data.id);
       }
     } catch (e) {
-      console.error('[TaskSet] createSet: exception', e);
+      console.error('[TaskSet] createSet exception', e);
     }
   }
 
@@ -230,8 +224,8 @@ export default function TaskSetPanel({
     });
   }
 
-  /** アイテムを上に移動する */
-  function moveItemUp(setId: string, itemId: string): void {
+  /** アイテムを兄弟の中で上/下に移動する */
+  function moveItem(setId: string, itemId: string, direction: 'up' | 'down'): void {
     setSets((prev) => prev.map((s) => {
       if (s.id !== setId) { return s; }
       const sorted: TaskSetItem[] = [...s.items].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -239,35 +233,9 @@ export default function TaskSetPanel({
       if (!current) { return s; }
       const siblings: TaskSetItem[] = sorted.filter((it) => (it.parentId ?? null) === (current.parentId ?? null));
       const idx: number = siblings.findIndex((it) => it.id === itemId);
-      if (idx <= 0) { return s; }
-      const target: TaskSetItem = siblings[idx - 1];
-      fetch('/api/task-sets/' + setId, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'swapOrder', itemId1: current.id, itemId2: target.id }),
-      });
-      return {
-        ...s,
-        items: s.items.map((it) => {
-          if (it.id === current.id) { return { ...it, sortOrder: target.sortOrder }; }
-          if (it.id === target.id) { return { ...it, sortOrder: current.sortOrder }; }
-          return it;
-        }),
-      };
-    }));
-  }
-
-  /** アイテムを下に移動する */
-  function moveItemDown(setId: string, itemId: string): void {
-    setSets((prev) => prev.map((s) => {
-      if (s.id !== setId) { return s; }
-      const sorted: TaskSetItem[] = [...s.items].sort((a, b) => a.sortOrder - b.sortOrder);
-      const current: TaskSetItem | undefined = sorted.find((it) => it.id === itemId);
-      if (!current) { return s; }
-      const siblings: TaskSetItem[] = sorted.filter((it) => (it.parentId ?? null) === (current.parentId ?? null));
-      const idx: number = siblings.findIndex((it) => it.id === itemId);
-      if (idx < 0 || idx >= siblings.length - 1) { return s; }
-      const target: TaskSetItem = siblings[idx + 1];
+      const targetIdx: number = direction === 'up' ? idx - 1 : idx + 1;
+      if (targetIdx < 0 || targetIdx >= siblings.length) { return s; }
+      const target: TaskSetItem = siblings[targetIdx];
       fetch('/api/task-sets/' + setId, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -323,6 +291,20 @@ export default function TaskSetPanel({
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'setParent', itemId, parentId: newParentId }),
     });
+  }
+
+  /** セット名を保存する（変更がなければ何もしない） */
+  function saveSetName(setId: string, rawName: string, currentName: string): void {
+    const newName: string = rawName.trim();
+    if (newName && newName !== currentName) {
+      setSets((prev) => prev.map((s) => (s.id === setId ? { ...s, name: newName } : s)));
+      fetch('/api/task-sets/' + setId, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rename', name: newName }),
+      });
+    }
+    setEditingSetName(null);
   }
 
   /** セットを適用 */
@@ -418,7 +400,7 @@ export default function TaskSetPanel({
           body: JSON.stringify({
             userId: user.id,
             name: data.name,
-            items: data.items.map((item, i: number) => ({
+            items: data.items.map((item) => ({
               title: item.title,
               estMin: item.estMin ?? 30,
               detail: item.detail ?? '',
@@ -520,32 +502,12 @@ export default function TaskSetPanel({
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        const newName: string = editSetNameValue.trim();
-                        if (newName) {
-                          setSets((prev) => prev.map((s) => (s.id === set.id ? { ...s, name: newName } : s)));
-                          fetch('/api/task-sets/' + set.id, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ action: 'rename', name: newName }),
-                          });
-                        }
-                        setEditingSetName(null);
+                        saveSetName(set.id, editSetNameValue, set.name);
                       } else if (e.key === 'Escape') {
                         setEditingSetName(null);
                       }
                     }}
-                    onBlur={() => {
-                      const newName: string = editSetNameValue.trim();
-                      if (newName && newName !== set.name) {
-                        setSets((prev) => prev.map((s) => (s.id === set.id ? { ...s, name: newName } : s)));
-                        fetch('/api/task-sets/' + set.id, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ action: 'rename', name: newName }),
-                        });
-                      }
-                      setEditingSetName(null);
-                    }}
+                    onBlur={() => saveSetName(set.id, editSetNameValue, set.name)}
                     className={styles.input}
                     style={{ width: 200, fontSize: 14 }}
                     autoFocus
@@ -768,8 +730,8 @@ export default function TaskSetPanel({
                           {isItemExpanded && (
                             <div className={styles.compactDetailInner} onClick={(e) => e.stopPropagation()}>
                               <MoveButtonBar
-                                onUp={() => moveItemUp(set.id, item.id)}
-                                onDown={() => moveItemDown(set.id, item.id)}
+                                onUp={() => moveItem(set.id, item.id, 'up')}
+                                onDown={() => moveItem(set.id, item.id, 'down')}
                                 onNest={() => nestItem(set.id, item.id)}
                                 onUnnest={() => unnestItem(set.id, item.id)}
                                 hasParent={!!item.parentId}

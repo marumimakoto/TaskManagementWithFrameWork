@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { AppUser } from './types';
 import { useIsMobile } from './useIsMobile';
+import { config } from '@/lib/config';
 import styles from './page.module.css';
 
 /** やりたいことリストの1項目 */
@@ -271,7 +272,7 @@ export default function BucketListPanel({ user }: { user: AppUser }): React.Reac
         }
         return current;
       });
-    }, 5000);
+    }, config.toast.bucketListUndoDurationMs);
 
     // 別のタイマーが既にあればクリアする処理は省略（複数並行削除の場合はラスト1個のみ復元可能）
     void timer;

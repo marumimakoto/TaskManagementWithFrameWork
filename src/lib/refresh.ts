@@ -1,6 +1,7 @@
 import { getDb, Db } from '@/lib/db';
 import crypto from 'crypto';
 import { REC_CARRY, REC_DAILY, REC_WEEKDAY, REC_MONTHLY, REC_YEARLY, DAY_KEY_TO_NUMBER, getWeekDayKey } from '@/lib/recurrence';
+import { config } from '@/lib/config';
 
 interface TodoRow {
   id: string;
@@ -260,14 +261,14 @@ export async function refreshUserTodos(db: Db, userId: string, today: string): P
     await db.run('DELETE FROM todos WHERE id = ?', t.id);
   }
 
-  // アーカイブを100件に制限
+  // アーカイブの上限件数で古いものを削除
   await db.run(`
     DELETE FROM archived_todos WHERE id IN (
       SELECT id FROM archived_todos WHERE user_id = ?
       ORDER BY archived_at DESC
-      LIMIT -1 OFFSET 100
+      LIMIT -1 OFFSET ?
     )
-  `, userId);
+  `, userId, config.archive.maxItems);
 
   // 3. 未完了タスクのlast_worked_atをリセット（毎日未着手に戻す。actualMinは累計なのでリセットしない）
   await db.run('UPDATE todos SET last_worked_at = NULL WHERE user_id = ? AND done = 0', userId);

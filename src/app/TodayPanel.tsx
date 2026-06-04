@@ -74,6 +74,7 @@ export default function TodayPanel({
   const [logMinutes, setLogMinutes] = useState<Record<string, string>>({});
   const [subView, setSubView] = useState<'tasks' | 'timeblock'>('tasks');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [addingLogId, setAddingLogId] = useState<string | null>(null);
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [editValue, setEditValue] = useState<string>('');
@@ -134,12 +135,19 @@ export default function TodayPanel({
   }
 
   function handleAddLog(id: string): void {
+    if (addingLogId) {
+      return;
+    }
     const min: number = parseInt(logMinutes[id] ?? '0', 10);
     if (min <= 0) {
       return;
     }
+    setAddingLogId(id);
     onAddLog(id, min);
     setLogMinutes((prev) => ({ ...prev, [id]: '' }));
+    // onAddLogは同期的にstateを更新してfire-and-forgetでfetchするため、
+    // 短い遅延後にロックを解除する
+    setTimeout(() => setAddingLogId(null), 500);
   }
 
   function renderTaskCard(t: Todo, isSelected: boolean): React.ReactElement {
@@ -304,8 +312,9 @@ export default function TodayPanel({
               onClick={() => handleAddLog(t.id)}
               className={styles.iconBtn}
               style={{ fontSize: 12, padding: '4px 8px' }}
+              disabled={addingLogId === t.id}
             >
-              記録
+              {addingLogId === t.id ? '記録中...' : '記録'}
             </button>
           </div>
         )}
@@ -328,7 +337,7 @@ export default function TodayPanel({
                     onKeyDown={(e) => { if (e.key === 'Enter') { handleAddLog(t.id); } }}
                     className={styles.inputNarrow}
                   />
-                  <button type="button" onClick={() => handleAddLog(t.id)} className={styles.iconBtn}>実績</button>
+                  <button type="button" onClick={() => handleAddLog(t.id)} className={styles.iconBtn} disabled={addingLogId === t.id}>{addingLogId === t.id ? '記録中...' : '実績'}</button>
                 </div>
               </>
             )}
